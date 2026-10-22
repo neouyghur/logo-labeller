@@ -22,6 +22,21 @@ Google's public keys) and starts its own Flask session.
    Done: project `logo-labeller`; `setup_vm.sh` writes its values into `/etc/labelweb.env`.
    These are public values; no service-account key is needed.
 
+## Getting code and data to the VM: the logo-labeller repo
+
+Aqua cannot ssh to the VM, so transfers go through a private GitHub repo, `logo-labeller`
+(working tree `/work/SAIVT/LOGO/labelling/logo-labeller`). Aqua pushes over
+`ssh.github.com:443` (alias `github-labeller` in `~/.ssh/config`, write deploy key
+`~/.ssh/logo_labeller_deploy`); the VM pulls with a read-only deploy key.
+
+```bash
+bash publish_repo.sh                                   # Aqua: code only
+bash publish_repo.sh /work/SAIVT/LOGO/labelling/pack   # Aqua: code + a packed pair set
+sudo labelweb-sync                                     # VM: pull, setup_vm.sh, images, load-pairs
+```
+
+The manual route below (scp through a laptop on the QUT VPN) still works.
+
 ## 1. Pack the images (on Aqua, as a PBS job)
 
 Input: a CSV with header `pair_key,img_a,img_b`; image paths as on Aqua.
@@ -94,4 +109,5 @@ rsync -av ubuntu@203.101.229.244:/srv/labelweb/data/backups/ /work/SAIVT/LOGO/la
 | `pack_images.py`, `pack_images.pbs` | Aqua side: collect the pair images into one tar |
 | `deploy/setup_vm.sh` | VM install: user, venv, env file, systemd, nginx, cron |
 | `deploy/labelweb-admin` | runs an admin command as `labelweb` with the env loaded |
+| `publish_repo.sh`, `deploy/labelweb-sync` | Aqua → GitHub → VM transfer (see above) |
 | `deploy/nginx-labelweb.conf`, `deploy/labelweb.service`, `deploy/backup.sh` | installed by `setup_vm.sh` |
