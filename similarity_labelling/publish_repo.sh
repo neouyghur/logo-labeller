@@ -4,6 +4,7 @@
 #   Code only:          bash publish_repo.sh
 #   Code + a pair set:  bash publish_repo.sh /work/SAIVT/LOGO/labelling/pack
 # A pair set (images.tar + pairs.csv from pack_images.pbs) replaces data/ in the repo.
+# Audit sheets: copy a sheet directory into $REPO/audit/<sheet>/ before running this.
 # Pushes over ssh.github.com:443 via the `github-labeller` alias in ~/.ssh/config.
 set -eo pipefail
 REPO=${REPO:-/work/SAIVT/LOGO/labelling/logo-labeller}
@@ -19,7 +20,9 @@ if [ -n "$PACK" ]; then
 fi
 
 cd "$REPO"
-git add -A similarity_labelling data 2>/dev/null || git add -A similarity_labelling
+git add -A similarity_labelling
+[ -d data ] && git add -A data
+[ -d audit ] && git add -A audit
 if git diff --cached --quiet; then
   echo "nothing to publish"
 else

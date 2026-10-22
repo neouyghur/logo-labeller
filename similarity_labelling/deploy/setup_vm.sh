@@ -11,9 +11,9 @@ id labelweb >/dev/null 2>&1 || useradd --system --home-dir /srv/labelweb --shell
 # ubuntu joins the group so it can read backups for copying off the VM
 usermod -aG labelweb ubuntu
 
-install -d -o labelweb -g labelweb -m 755 /srv/labelweb /srv/labelweb/app /srv/labelweb/images
+install -d -o labelweb -g labelweb -m 755 /srv/labelweb /srv/labelweb/app /srv/labelweb/images /srv/labelweb/audit
 install -d -o labelweb -g labelweb -m 750 /srv/labelweb/data /srv/labelweb/data/backups
-cp -r "$SRC/app.py" "$SRC/templates" "$SRC/requirements.txt" /srv/labelweb/app/
+cp -r "$SRC/app.py" "$SRC/audit.py" "$SRC/templates" "$SRC/static" "$SRC/requirements.txt" /srv/labelweb/app/
 chown -R labelweb:labelweb /srv/labelweb/app
 
 [ -d /srv/labelweb/venv ] || python3 -m venv /srv/labelweb/venv
@@ -32,7 +32,9 @@ fi
 for kv in LABELWEB_FIREBASE_API_KEY=AIzaSyDQeNniSscSGT-IqSofEjV_UwTkiZZHGNU \
           LABELWEB_FIREBASE_AUTH_DOMAIN=logo-labeller.firebaseapp.com \
           LABELWEB_FIREBASE_PROJECT_ID=logo-labeller \
-          LABELWEB_OPEN_SIGNUP=1; do
+          LABELWEB_OPEN_SIGNUP=1 \
+          LABELWEB_AUDIT=/srv/labelweb/audit \
+          LABELWEB_AUDIT_PASSCODE=$(python3 -c 'import secrets; print(secrets.token_hex(4))'); do
   grep -q "^${kv%%=*}=" /etc/labelweb.env || echo "$kv" >> /etc/labelweb.env
 done
 
@@ -52,4 +54,5 @@ systemctl daemon-reload
 systemctl enable labelweb
 systemctl restart labelweb
 systemctl reload nginx
+echo "audit passcode: $(grep '^LABELWEB_AUDIT_PASSCODE=' /etc/labelweb.env | cut -d= -f2)"
 echo "done: https://203-101-229-244.sslip.io"

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit sheet</title>
+<link rel="stylesheet" href="app.css">
+<script>window.CFG = {"task": "task2", "labeller": "A", "tiles": "tiles/", "title": "Logo audit \u00b7 practice, Task 2", "help": "<h2>Task 2: does this logo appear again?</h2>\n<p>Left: an image from the gallery (blue frame). Right: other gallery images that look similar.\nClick every candidate that shows <b>the same logo</b>: identical or near-identical artwork, ignoring size,\npadding, and small colour shifts. Similar designs, the same style, or the same initials do <b>not</b> count.</p>\n<p>Clicked candidates get a green frame and the item turns green. If none match, leave it. Use <b>unsure</b>\nwhen you cannot decide. Hover a candidate to see it next to the image at 448&nbsp;px.</p>\n<p>Some images appear twice with different candidates; judge each set on its own.</p>\n<p>Check every item on the page, then press <b>Mark page done</b>. Export a TSV at the end of each session.</p>"};</script>
+<script src="data_A.js"></script>
+</head>
+<body>
+<header>
+  <h1>Audit sheet</h1>
+  <div id="bar"><div></div></div><span id="progress"></span>
+  <span class="grow"></span>
+  <button id="prev">◀ Prev</button><span id="pageinfo"></span><button id="next">Next ▶</button>
+  <button id="done" class="primary">Mark page done</button>
+  <button id="export">Export TSV</button>
+  <label class="btn">Import TSV<input id="importfile" type="file" accept=".tsv,.txt" hidden></label>
+  <button id="helpbtn">Help</button>
+</header>
+<div id="warn"></div>
+<div id="adjbar" style="display:none; gap:12px; padding:8px 16px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--line)">
+  <label class="btn">Load labeller A TSV<input id="fileA" type="file" accept=".tsv,.txt" hidden></label><span id="adjA"></span>
+  <label class="btn">Load labeller B TSV<input id="fileB" type="file" accept=".tsv,.txt" hidden></label><span id="adjB"></span>
+  <span id="adjinfo"></span>
+</div>
+<main>
+  <div id="grid"></div>
+  <aside id="zoom"><div class="imgs"></div><div class="cap"></div></aside>
+</main>
+<footer><button id="prev2">◀ Prev</button><button id="next2">Next ▶</button>
+  <span>Mark each page done after checking every image on it, then go on. Export a TSV at the end of each session.</span></footer>
+<div id="help"><div id="helptext"></div><p><i>Click anywhere to close.</i></p></div>
+<script src="app.js"></script>
+</body>
+</html>

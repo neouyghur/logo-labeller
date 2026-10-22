@@ -31,7 +31,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
-      if (r.ok) { location.href = "{{ url_for('index') }}"; return; }
+      if (r.ok) { location.href = {{ next | tojson }}; return; }
       show((await r.json()).error);
     } catch (e) {
       show(e.code === "auth/popup-blocked"

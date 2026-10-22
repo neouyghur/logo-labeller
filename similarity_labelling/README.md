@@ -94,6 +94,25 @@ are served like any pair, and count towards no progress figure. Annotators whose
 is below 0.8 are left out of `pairs_summary.tsv`. The same query is never served twice in a
 row while other queries still need answers.
 
+## Gallery audit sheets (`audit.py`, `/audit/`)
+
+The quality-audit sheets from `quality_audit/make_sheets.py` are hosted for any number of
+labellers at `https://203-101-229-244.sslip.io/audit/`. After Google sign-in a labeller
+enters the audit passcode once (`LABELWEB_AUDIT_PASSCODE` in `/etc/labelweb.env`;
+`setup_vm.sh` generates one and prints it; empty closes the audit). Each labeller is
+`L<user id>` and gets the items in their own shuffled order. The sheets' `app.js` runs
+unchanged; `static/sync.js` saves state and TSV rows to the server every 3 s, and
+`static/restore.js` restores the server copy when it is newer than the browser's.
+
+Sheets travel in the repo under `audit/<sheet>/` and land in `/srv/labelweb/audit/`.
+
+```bash
+sudo labelweb-admin audit-export /srv/labelweb/data/audit_export
+```
+
+writes `labels_<sheet>_<labeller>.tsv` in the sheets' own export format, plus
+`audit_labellers.tsv` (labeller, email, sheet, last save).
+
 ## Results and backups
 
 ```bash

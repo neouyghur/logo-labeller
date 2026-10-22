@@ -60,6 +60,19 @@ CREATE TABLE IF NOT EXISTS labels (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, pair_id)
 );
+-- the gallery audit sheets (audit.py)
+CREATE TABLE IF NOT EXISTS audit_access (
+    user_id    INTEGER PRIMARY KEY REFERENCES users(id),
+    granted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS audit_state (
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    sheet      TEXT NOT NULL,
+    state      TEXT NOT NULL,
+    rows       TEXT NOT NULL,
+    updated_ms INTEGER NOT NULL,
+    PRIMARY KEY (user_id, sheet)
+);
 """
 
 use_x_accel = os.environ.get("LABELWEB_X_ACCEL", "0") == "1"
@@ -77,6 +90,9 @@ app.config.update(
     TARGET=int(os.environ.get("LABELWEB_TARGET", "3")),
     # 1: any verified Google account may sign in; 0: only emails added with allow-email
     OPEN_SIGNUP=os.environ.get("LABELWEB_OPEN_SIGNUP", "0") == "1",
+    # gallery audit sheets: one directory per sheet; empty passcode closes the audit
+    AUDIT_ROOT=os.environ.get("LABELWEB_AUDIT", "audit"),
+    AUDIT_PASSCODE=os.environ.get("LABELWEB_AUDIT_PASSCODE", ""),
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=use_x_accel,
     # the Firebase web config; these values are public by design
@@ -115,9 +131,14 @@ def login_required(view):
         if uid is None or db().execute("SELECT 1 FROM users WHERE id = ? AND active = 1",
                                        (uid,)).fetchone() is None:
             session.clear()
-            return redirect(url_for("login"))
+            return redirect(url_for("login", next=request.path))
         return view(*args, **kwargs)
     return wrapped
+
+
+def safe_next(path):
+    """A local path to return to after sign-in, or the labelling page."""
+    return path if path and path.startswith("/") and not path.startswith("//") else url_for("index")
 
 
 def progress():
@@ -157,7 +178,8 @@ def next_pair(skip_id=None):
 @app.route("/login")
 def login():
     return render_template("login.html", firebase=app.config["FIREBASE"],
-                           configured=firebase_configured())
+                           configured=firebase_configured(),
+                           next=safe_next(request.args.get("next")))
 
 
 @app.route("/session", methods=["POST"])
@@ -399,3 +421,6 @@ def export(out_dir, min_check_accuracy):
                "majority", "agreement"], summary)
     click.echo(f"{len(answers)} answers from {len(users)} annotators "
                f"({sum(not t for t in trusted.values())} untrusted) -> {out_dir}/")
+
+
+import audit  # noqa: E402,F401  registers the /audit pages and audit-export

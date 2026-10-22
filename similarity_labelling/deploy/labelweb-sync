@@ -11,6 +11,9 @@ bash "$CLONE/similarity_labelling/deploy/setup_vm.sh"
 if [ -d "$CLONE/data/images" ]; then
   rsync -a --chown=labelweb:labelweb --chmod=D755,F644 "$CLONE/data/images/" /srv/labelweb/images/
 fi
+if [ -d "$CLONE/audit" ]; then
+  rsync -a --chown=labelweb:labelweb --chmod=D755,F644 "$CLONE/audit/" /srv/labelweb/audit/
+fi
 if [ -f "$CLONE/data/pairs.csv" ]; then
   install -o labelweb -g labelweb -m 640 "$CLONE/data/pairs.csv" /srv/labelweb/data/pairs.csv
   labelweb-admin load-pairs /srv/labelweb/data/pairs.csv

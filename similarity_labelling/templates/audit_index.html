@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block body %}
+<header>
+  <span>{{ session.name }}{% if access %} · labeller {{ labeller }}{% endif %}</span>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+{% if not access %}
+<form method="post" class="card">
+  <h1 class="question">Gallery audit</h1>
+  {% if error %}<p class="flash">{{ error }}</p>{% endif %}
+  <label for="passcode">Passcode</label>
+  <input id="passcode" name="passcode" type="password" autocomplete="off" required autofocus>
+  <button>Continue</button>
+</form>
+{% else %}
+<div class="card" style="max-width: 560px">
+  <h1 class="question">Gallery audit</h1>
+  {% if sheets %}
+  <p>Open a sheet. Your labels save to the server automatically; you can stop and come back
+     at any time, on any computer.</p>
+  <ul>
+    {% for name, title in sheets %}
+    <li><a href="{{ url_for('audit.page', sheet=name) }}">{{ title }}</a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No sheets are available yet.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

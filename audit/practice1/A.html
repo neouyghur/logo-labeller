@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit sheet</title>
+<link rel="stylesheet" href="app.css">
+<script>window.CFG = {"task": "task1", "labeller": "A", "tiles": "tiles/", "title": "Logo audit \u00b7 practice, Task 1", "help": "<h2>Task 1: logo or non-logo?</h2>\n<p>Every tile starts as <b>logo</b>. Mark the ones that are not:</p>\n<ul><li><b>C</b> non-logo: a logo shown <b>in context</b>: a mockup, a sign, a vehicle, a photo</li>\n<li><b>M</b> non-logo: <b>several logos</b> in one image</li>\n<li><b>B</b> non-logo: <b>blank or corrupt</b></li>\n<li><b>O</b> non-logo: <b>other</b>: anything else that is not a logo (screenshot, banner, photo without a logo)</li>\n<li><b>?</b> unsure: you cannot decide (we discuss these later)</li></ul>\n<p>Tags, on any tile, independent of the label: <b>F</b> = a flag; <b>G</b> = a generic site or UI icon\n(social-media glyph, phone, search, envelope, a platform's default favicon).</p>\n<p>A logo is the mark itself: a symbol, wordmark or emblem on a plain or transparent background, at any size or colour.\nTiles are shown small; the panel on the right shows the tile under the mouse at 448&nbsp;px.</p>\n<p>Keys while the mouse is over a tile: <kbd>C</kbd> <kbd>M</kbd> <kbd>B</kbd> <kbd>O</kbd> reasons, <kbd>U</kbd> unsure,\n<kbd>L</kbd> back to logo, <kbd>F</kbd> flag, <kbd>G</kbd> generic. Clicking a tile cycles logo \u2192 non-logo \u2192 unsure.\n<kbd>\u2190</kbd> <kbd>\u2192</kbd> change page.</p>\n<p>Check every tile on the page, then press <b>Mark page done</b>. Export a TSV at the end of each session and send it in.</p>"};</script>
+<script src="data_A.js"></script>
+</head>
+<body>
+<header>
+  <h1>Audit sheet</h1>
+  <div id="bar"><div></div></div><span id="progress"></span>
+  <span class="grow"></span>
+  <button id="prev">◀ Prev</button><span id="pageinfo"></span><button id="next">Next ▶</button>
+  <button id="done" class="primary">Mark page done</button>
+  <button id="export">Export TSV</button>
+  <label class="btn">Import TSV<input id="importfile" type="file" accept=".tsv,.txt" hidden></label>
+  <button id="helpbtn">Help</button>
+</header>
+<div id="warn"></div>
+<div id="adjbar" style="display:none; gap:12px; padding:8px 16px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--line)">
+  <label class="btn">Load labeller A TSV<input id="fileA" type="file" accept=".tsv,.txt" hidden></label><span id="adjA"></span>
+  <label class="btn">Load labeller B TSV<input id="fileB" type="file" accept=".tsv,.txt" hidden></label><span id="adjB"></span>
+  <span id="adjinfo"></span>
+</div>
+<main>
+  <div id="grid"></div>
+  <aside id="zoom"><div class="imgs"></div><div class="cap"></div></aside>
+</main>
+<footer><button id="prev2">◀ Prev</button><button id="next2">Next ▶</button>
+  <span>Mark each page done after checking every image on it, then go on. Export a TSV at the end of each session.</span></footer>
+<div id="help"><div id="helptext"></div><p><i>Click anywhere to close.</i></p></div>
+<script src="app.js"></script>
+</body>
+</html>
