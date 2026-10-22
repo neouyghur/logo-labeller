@@ -16,7 +16,10 @@ Admin commands (run with `flask --app app <command>`, or `sudo labelweb-admin <c
   remove-email EMAIL... revoke access at the next request; their answers are kept
   list-users            emails, access, answer counts
   progress              how many pairs have reached the target number of answers
-  export OUT.tsv        one row per (pair, annotator) answer
+  export OUT_DIR        answers.tsv, annotators.tsv, pairs_summary.tsv, annotator_emails.tsv
+
+Attention checks are pairs with is_check = 1: a query shown with another query's positive, so
+the right answer is "no". They are served like any pair but count towards no progress figure.
 """
 import csv
 import mimetypes
@@ -42,7 +45,8 @@ CREATE TABLE IF NOT EXISTS pairs (
     pair_key TEXT UNIQUE NOT NULL,
     img_a    TEXT NOT NULL,
     img_b    TEXT NOT NULL,
-    shuffle  INTEGER NOT NULL DEFAULT (abs(random()))
+    shuffle  INTEGER NOT NULL DEFAULT (abs(random())),
+    is_check INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS users (
     id     INTEGER PRIMARY KEY,
@@ -119,25 +123,35 @@ def login_required(view):
 def progress():
     done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?",
                         (session["user_id"],)).fetchone()[0]
-    total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
-    # answers that count towards the target; extra answers beyond it are kept but not counted here
+    total = db().execute("SELECT COUNT(*) FROM pairs WHERE is_check = 0").fetchone()[0]
+    # answers that count towards the target; extra answers beyond it, and attention checks, are not
     counted = db().execute(
         """SELECT COALESCE(SUM(MIN(n, ?)), 0) FROM
-           (SELECT COUNT(*) AS n FROM labels GROUP BY pair_id)""",
+           (SELECT COUNT(*) AS n FROM labels l JOIN pairs p ON p.id = l.pair_id
+            WHERE p.is_check = 0 GROUP BY l.pair_id)""",
         (app.config["TARGET"],)).fetchone()[0]
     return {"done": done, "total": total, "counted": counted,
             "needed": total * app.config["TARGET"]}
 
 
 def next_pair(skip_id=None):
-    """The pair this annotator should see next, or None when there is nothing left for them."""
+    """The pair this annotator should see next, or None when there is nothing left for them.
+
+    Within the fewest-answers level, a pair whose query (img_a) differs from the one this
+    annotator saw last comes first, so the same query is not shown twice in a row.
+    """
+    last = db().execute(
+        """SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
+           WHERE l.user_id = ? ORDER BY l.rowid DESC LIMIT 1""",
+        (session["user_id"],)).fetchone()
     return db().execute(
         """SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
            WHERE p.id IS NOT ?
            GROUP BY p.id
            HAVING COUNT(l.user_id) < ? AND COALESCE(SUM(l.user_id = ?), 0) = 0
-           ORDER BY COUNT(l.user_id), p.shuffle LIMIT 1""",
-        (skip_id, app.config["TARGET"], session["user_id"])).fetchone()
+           ORDER BY COUNT(l.user_id), p.img_a IS ?, p.shuffle LIMIT 1""",
+        (skip_id, app.config["TARGET"], session["user_id"],
+         last["img_a"] if last else None)).fetchone()
 
 
 @app.route("/login")
@@ -247,6 +261,9 @@ def init_db():
         db().execute("ALTER TABLE pairs ADD COLUMN shuffle INTEGER NOT NULL DEFAULT 0")
         db().execute("UPDATE pairs SET shuffle = abs(random())")
         db().commit()
+    if "is_check" not in columns:
+        db().execute("ALTER TABLE pairs ADD COLUMN is_check INTEGER NOT NULL DEFAULT 0")
+        db().commit()
     db().execute("PRAGMA journal_mode = WAL")
     click.echo(f"initialised {app.config['DB_PATH']}")
 
@@ -255,9 +272,11 @@ def init_db():
 @click.argument("csv_path")
 def load_pairs(csv_path):
     with open(csv_path, newline="") as f:
-        rows = [(r["pair_key"], r["img_a"], r["img_b"]) for r in csv.DictReader(f)]
+        rows = [(r["pair_key"], r["img_a"], r["img_b"], int(r.get("is_check") or 0))
+                for r in csv.DictReader(f)]
     before = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
-    db().executemany("INSERT OR IGNORE INTO pairs (pair_key, img_a, img_b) VALUES (?, ?, ?)", rows)
+    db().executemany(
+        "INSERT OR IGNORE INTO pairs (pair_key, img_a, img_b, is_check) VALUES (?, ?, ?, ?)", rows)
     db().commit()
     after = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
     click.echo(f"{len(rows)} rows read, {after - before} new pairs, {after} total")
@@ -298,7 +317,7 @@ def progress_cmd():
     rows = db().execute(
         """SELECT n, COUNT(*) AS pairs FROM
            (SELECT COUNT(l.user_id) AS n FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
-            GROUP BY p.id)
+            WHERE p.is_check = 0 GROUP BY p.id)
            GROUP BY n ORDER BY n""").fetchall()
     total = sum(r["pairs"] for r in rows)
     complete = sum(r["pairs"] for r in rows if r["n"] >= target)
@@ -307,15 +326,76 @@ def progress_cmd():
         click.echo(f"  {r['n']} answers: {r['pairs']} pairs")
 
 
-@app.cli.command("export")
-@click.argument("out_path")
-def export(out_path):
-    rows = db().execute(
-        """SELECT p.pair_key, p.img_a, p.img_b, u.email, l.label, l.updated_at
-           FROM labels l JOIN pairs p ON p.id = l.pair_id JOIN users u ON u.id = l.user_id
-           ORDER BY p.id, u.email""").fetchall()
-    with open(out_path, "w", newline="") as f:
+def write_tsv(path, header, rows):
+    with open(path, "w", newline="") as f:
         w = csv.writer(f, delimiter="\t")
-        w.writerow(["pair_key", "img_a", "img_b", "annotator", "label", "updated_at"])
-        w.writerows(tuple(r) for r in rows)
-    click.echo(f"{len(rows)} answers -> {out_path}")
+        w.writerow(header)
+        w.writerows(rows)
+
+
+@app.cli.command("export")
+@click.argument("out_dir")
+@click.option("--min-check-accuracy", default=0.8, show_default=True,
+              help="annotators below this attention-check accuracy are left out of pairs_summary")
+def export(out_dir, min_check_accuracy):
+    """Write answers, annotators, pairs_summary and annotator_emails TSVs into OUT_DIR."""
+    os.makedirs(out_dir, exist_ok=True)
+    users = db().execute("SELECT id, email FROM users ORDER BY id").fetchall()
+    # anonymous ids in sign-up order; the email mapping goes to its own file
+    anon = {u["id"]: f"A{i:02d}" for i, u in enumerate(users, 1)}
+    answers = db().execute(
+        """SELECT p.id AS pair_id, p.pair_key, p.img_a, p.img_b, p.is_check,
+                  l.user_id, l.label, l.updated_at
+           FROM labels l JOIN pairs p ON p.id = l.pair_id
+           ORDER BY p.id, l.user_id""").fetchall()
+
+    def query_of(p):
+        return os.path.basename(p["img_a"])
+
+    def positive_of(p):
+        return "/".join(p["img_b"].split("/")[-2:])
+
+    stats = {u["id"]: {"n": 0, "checks": 0, "correct": 0} for u in users}
+    for a in answers:
+        s = stats[a["user_id"]]
+        s["n"] += 1
+        if a["is_check"]:
+            s["checks"] += 1
+            s["correct"] += a["label"] == "no"
+    trusted = {}
+    for uid, s in stats.items():
+        acc = s["correct"] / s["checks"] if s["checks"] else None
+        # no checks answered yet: trusted until there is evidence otherwise
+        trusted[uid] = acc is None or acc >= min_check_accuracy
+        s["acc"] = acc
+
+    write_tsv(os.path.join(out_dir, "answers.tsv"),
+              ["pair_key", "query", "positive", "is_check", "annotator", "label", "answered_at"],
+              [(a["pair_key"], query_of(a), positive_of(a), a["is_check"], anon[a["user_id"]],
+                a["label"], a["updated_at"]) for a in answers])
+    write_tsv(os.path.join(out_dir, "annotators.tsv"),
+              ["annotator", "n_answers", "n_checks", "check_correct", "check_accuracy", "trusted"],
+              [(anon[uid], s["n"], s["checks"], s["correct"],
+                "" if s["acc"] is None else f"{s['acc']:.2f}", "yes" if trusted[uid] else "no")
+               for uid, s in stats.items()])
+    write_tsv(os.path.join(out_dir, "annotator_emails.tsv"), ["annotator", "email"],
+              [(anon[u["id"]], u["email"]) for u in users])
+
+    counts = {}
+    for a in answers:
+        if not a["is_check"] and trusted[a["user_id"]]:
+            counts.setdefault(a["pair_id"], {"yes": 0, "no": 0, "unsure": 0})[a["label"]] += 1
+    summary = []
+    for p in db().execute("SELECT * FROM pairs WHERE is_check = 0 ORDER BY pair_key"):
+        c = counts.get(p["id"], {"yes": 0, "no": 0, "unsure": 0})
+        n = sum(c.values())
+        top = max(c.values())
+        winners = [k for k in LABELS if c[k] == top]
+        majority = "" if n == 0 else winners[0] if len(winners) == 1 else "tie"
+        summary.append((p["pair_key"], query_of(p), positive_of(p), n, c["yes"], c["no"],
+                        c["unsure"], majority, f"{top / n:.2f}" if n else ""))
+    write_tsv(os.path.join(out_dir, "pairs_summary.tsv"),
+              ["pair_key", "query", "positive", "n_answers", "n_yes", "n_no", "n_unsure",
+               "majority", "agreement"], summary)
+    click.echo(f"{len(answers)} answers from {len(users)} annotators "
+               f"({sum(not t for t in trusted.values())} untrusted) -> {out_dir}/")

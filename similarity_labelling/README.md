@@ -86,13 +86,26 @@ has the URL can label: check `list-users` and block strangers with `remove-email
 (a removed email stays blocked; its answers stay in the database and in `export`).
 Any address that is a Google account works, including a QUT address registered as one.
 
+## Attention checks
+
+`make_checks.py` appends ~3% check pairs to a packed `pairs.csv` (column `is_check`): a query
+shown with another query's positive, so the right answer is "no". They reuse packed images,
+are served like any pair, and count towards no progress figure. Annotators whose check accuracy
+is below 0.8 are left out of `pairs_summary.tsv`. The same query is never served twice in a
+row while other queries still need answers.
+
 ## Results and backups
 
 ```bash
-sudo labelweb-admin export /srv/labelweb/data/labels.tsv
+sudo labelweb-admin export /srv/labelweb/data/export     # --min-check-accuracy 0.8
 ```
 
-Columns: `pair_key, img_a, img_b, annotator, label, updated_at` — one row per answer.
+| File | One row per | Columns |
+|---|---|---|
+| `pairs_summary.tsv` | real pair | `pair_key, query, positive, n_answers, n_yes, n_no, n_unsure, majority, agreement` (trusted annotators only; `majority` may be `tie`) |
+| `annotators.tsv` | annotator | `annotator, n_answers, n_checks, check_correct, check_accuracy, trusted` |
+| `answers.tsv` | answer, checks included | `pair_key, query, positive, is_check, annotator, label, answered_at` |
+| `annotator_emails.tsv` | annotator | `annotator, email` — private; the other files use `A01`, `A02`, … |
 
 A cron job writes `/srv/labelweb/data/backups/labels-YYYY-MM-DD.sqlite3` at 03:17 daily,
 keeping 30 days. **Nectar does not back up the VM** and deletes it 3 months after the
