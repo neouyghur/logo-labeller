@@ -34,7 +34,7 @@ for kv in LABELWEB_FIREBASE_API_KEY=AIzaSyDQeNniSscSGT-IqSofEjV_UwTkiZZHGNU \
           LABELWEB_FIREBASE_PROJECT_ID=logo-labeller \
           LABELWEB_OPEN_SIGNUP=1 \
           LABELWEB_AUDIT=/srv/labelweb/audit \
-          LABELWEB_AUDIT_PASSCODE=$(python3 -c 'import secrets; print(secrets.token_hex(4))'); do
+          LABELWEB_AUDIT_PASSCODE=QUTMETU; do
   grep -q "^${kv%%=*}=" /etc/labelweb.env || echo "$kv" >> /etc/labelweb.env
 done
 

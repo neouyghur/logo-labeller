@@ -83,7 +83,9 @@ def index():
     error = None
     passcode = current_app.config["AUDIT_PASSCODE"]
     if request.method == "POST" and not has_access():
-        if passcode and secrets.compare_digest(request.form.get("passcode", ""), passcode):
+        # a simple shared word: case and surrounding spaces don't matter
+        typed = request.form.get("passcode", "").strip().upper()
+        if passcode and secrets.compare_digest(typed, passcode.strip().upper()):
             db().execute("INSERT OR IGNORE INTO audit_access (user_id) VALUES (?)", (session["user_id"],))
             db().commit()
             return redirect(url_for("audit.index"))

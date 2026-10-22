@@ -99,7 +99,7 @@ row while other queries still need answers.
 The quality-audit sheets from `quality_audit/make_sheets.py` are hosted for any number of
 labellers at `https://203-101-229-244.sslip.io/audit/`. After Google sign-in a labeller
 enters the audit passcode once (`LABELWEB_AUDIT_PASSCODE` in `/etc/labelweb.env`;
-`setup_vm.sh` generates one and prints it; empty closes the audit). Each labeller is
+default `QUTMETU`, case-insensitive; empty closes the audit). Each labeller is
 `L<user id>` and gets the items in their own shuffled order. The sheets' `app.js` runs
 unchanged; `static/sync.js` saves state and TSV rows to the server every 3 s, and
 `static/restore.js` restores the server copy when it is newer than the browser's.
