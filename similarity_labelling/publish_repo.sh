@@ -25,5 +25,10 @@ if git diff --cached --quiet; then
 else
   git commit -q -m "Publish labelling code${PACK:+ and pairs from $PACK}"
 fi
-git push -q origin main
-echo "pushed $(git log -1 --format='%h %s')"
+if [ "${PUSH:-1}" = 1 ]; then
+  git push -q origin main
+  echo "pushed $(git log -1 --format='%h %s')"
+else
+  # compute nodes have no route to GitHub: commit in a job, push from the login node
+  echo "committed $(git log -1 --format='%h %s'); push with: git -C $REPO push origin main"
+fi

@@ -4,8 +4,10 @@ Website where annotators judge whether two logos are similar: **yes / no / unsur
 Flask + SQLite behind nginx on the Nectar VM `logo-label` (203.101.229.244),
 served at https://203-101-229-244.sslip.io.
 
-Every annotator sees every pair, in the order of the loaded CSV (shuffle the CSV beforehand
-if order matters). Keyboard: `Y`/`N`/`U` or `1`/`2`/`3`, `B` goes back. Images are only
+Every pair needs `LABELWEB_TARGET` answers (default 3) from different annotators. Each
+annotator gets a pair they have not answered, fewest answers first, in a fixed random order;
+annotators can join or stop at any time. `sudo labelweb-admin progress` shows how many pairs
+have reached the target. Keyboard: `Y`/`N`/`U` or `1`/`2`/`3`, `B` goes back. Images are only
 served to logged-in users (nginx `internal` location + `X-Accel-Redirect`).
 
 Sign-in is **Firebase Authentication with Google**. `LABELWEB_OPEN_SIGNUP=1` in

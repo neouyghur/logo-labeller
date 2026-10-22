@@ -1,17 +1,19 @@
 {% extends "base.html" %}
 {% block body %}
 <header>
-  <span>{{ session.name }} · {{ done }} / {{ total }} labelled</span>
+  <span>{{ session.name }} · you: {{ done }} answered · overall: {{ counted }} / {{ needed }}</span>
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
 </header>
 <div class="card">
   {% if total == 0 %}
   <p class="question">No pairs are loaded yet.</p>
   <p>Check back later.</p>
-  {% else %}
+  {% elif counted >= needed %}
   <p class="question">All done — thank you.</p>
-  <p>You have labelled every pair. To change an answer, go to
-     <a href="{{ url_for('pair', pair_id=1) }}">the first pair</a> and step through.</p>
+  <p>Every pair has enough answers.</p>
+  {% else %}
+  <p class="question">Nothing left for you — thank you.</p>
+  <p>You have answered every pair that still needs answers; the rest are waiting for other annotators.</p>
   {% endif %}
 </div>
 {% endblock %}

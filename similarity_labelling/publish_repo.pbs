@@ -1,0 +1,13 @@
+#!/bin/bash -l
+#PBS -N publish_labeller
+#PBS -l select=1:ncpus=1:mem=4GB
+#PBS -l walltime=1:00:00
+#PBS -o /work/SAIVT/LOGO/logs/labelling/
+#PBS -e /work/SAIVT/LOGO/logs/labelling/
+# Unpack a pair set into the logo-labeller repo and commit it (no push: run
+# `git -C /work/SAIVT/LOGO/labelling/logo-labeller push origin main` on the login node after).
+#   qsub -v PACK=/work/SAIVT/LOGO/labelling/real_202610 publish_repo.pbs
+set -eo pipefail
+mkdir -p /work/SAIVT/LOGO/logs/labelling
+echo "pack: $PACK"
+PUSH=0 bash "$HOME/workspace/Logo-dataset-projects/similarity_labelling/publish_repo.sh" "$PACK"

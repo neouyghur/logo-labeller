@@ -1,7 +1,10 @@
 """Pairwise logo-similarity labelling site.
 
-Each annotator sees every pair once, in pair id order (the order of the loaded CSV),
-and answers yes / no / unsure. Answers can be changed by going back.
+One pair per page; the answer is yes / no / unsure. Every pair should get LABELWEB_TARGET
+answers (default 3) from different annotators: each annotator is served a pair they have not
+answered, fewest answers first, then in a fixed random order (pairs.shuffle). Once every pair
+has reached the target, annotators see the done page; any number of annotators can join.
+Answers can be changed by going back.
 Sign-in is Firebase Authentication (Google). With LABELWEB_OPEN_SIGNUP=1 any verified Google
 account gets a session on first sign-in; otherwise only emails added with allow-email do.
 Behind nginx, images are handed off with X-Accel-Redirect so they stay behind the login.
@@ -12,6 +15,7 @@ Admin commands (run with `flask --app app <command>`, or `sudo labelweb-admin <c
   allow-email EMAIL...  let these Google accounts sign in
   remove-email EMAIL... revoke access at the next request; their answers are kept
   list-users            emails, access, answer counts
+  progress              how many pairs have reached the target number of answers
   export OUT.tsv        one row per (pair, annotator) answer
 """
 import csv
@@ -37,7 +41,8 @@ CREATE TABLE IF NOT EXISTS pairs (
     id       INTEGER PRIMARY KEY,
     pair_key TEXT UNIQUE NOT NULL,
     img_a    TEXT NOT NULL,
-    img_b    TEXT NOT NULL
+    img_b    TEXT NOT NULL,
+    shuffle  INTEGER NOT NULL DEFAULT (abs(random()))
 );
 CREATE TABLE IF NOT EXISTS users (
     id     INTEGER PRIMARY KEY,
@@ -65,6 +70,7 @@ app.config.update(
     DB_PATH=os.environ.get("LABELWEB_DB", "labels.sqlite3"),
     IMAGE_ROOT=os.environ.get("LABELWEB_IMAGES", "images"),
     USE_X_ACCEL=use_x_accel,
+    TARGET=int(os.environ.get("LABELWEB_TARGET", "3")),
     # 1: any verified Google account may sign in; 0: only emails added with allow-email
     OPEN_SIGNUP=os.environ.get("LABELWEB_OPEN_SIGNUP", "0") == "1",
     SESSION_COOKIE_SAMESITE="Lax",
@@ -114,16 +120,24 @@ def progress():
     done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?",
                         (session["user_id"],)).fetchone()[0]
     total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
-    return {"done": done, "total": total}
+    # answers that count towards the target; extra answers beyond it are kept but not counted here
+    counted = db().execute(
+        """SELECT COALESCE(SUM(MIN(n, ?)), 0) FROM
+           (SELECT COUNT(*) AS n FROM labels GROUP BY pair_id)""",
+        (app.config["TARGET"],)).fetchone()[0]
+    return {"done": done, "total": total, "counted": counted,
+            "needed": total * app.config["TARGET"]}
 
 
-def next_unlabelled(after_id=0):
+def next_pair(skip_id=None):
+    """The pair this annotator should see next, or None when there is nothing left for them."""
     return db().execute(
-        """SELECT p.* FROM pairs p
-           LEFT JOIN labels l ON l.pair_id = p.id AND l.user_id = ?
-           WHERE l.pair_id IS NULL AND p.id > ?
-           ORDER BY p.id LIMIT 1""",
-        (session["user_id"], after_id)).fetchone()
+        """SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
+           WHERE p.id IS NOT ?
+           GROUP BY p.id
+           HAVING COUNT(l.user_id) < ? AND COALESCE(SUM(l.user_id = ?), 0) = 0
+           ORDER BY COUNT(l.user_id), p.shuffle LIMIT 1""",
+        (skip_id, app.config["TARGET"], session["user_id"])).fetchone()
 
 
 @app.route("/login")
@@ -170,7 +184,7 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    row = next_unlabelled()
+    row = next_pair()
     if row is None:
         return render_template("done.html", **progress())
     return redirect(url_for("pair", pair_id=row["id"]))
@@ -182,11 +196,16 @@ def pair(pair_id):
     p = db().execute("SELECT * FROM pairs WHERE id = ?", (pair_id,)).fetchone()
     if p is None:
         abort(404)
-    current = db().execute("SELECT label FROM labels WHERE user_id = ? AND pair_id = ?",
+    current = db().execute("SELECT rowid, label FROM labels WHERE user_id = ? AND pair_id = ?",
                            (session["user_id"], pair_id)).fetchone()
-    prev_id = db().execute("SELECT MAX(id) FROM pairs WHERE id < ?", (pair_id,)).fetchone()[0]
+    # "previous" walks back through this annotator's own answers, in the order first given
+    # (an upsert keeps the rowid, so changing an answer does not reorder them)
+    prev = db().execute(
+        "SELECT pair_id FROM labels WHERE user_id = ? AND rowid < ? ORDER BY rowid DESC LIMIT 1",
+        (session["user_id"], current["rowid"] if current else sys.maxsize)).fetchone()
     return render_template("pair.html", pair=p, current=current["label"] if current else None,
-                           prev_id=prev_id, prefetch=next_unlabelled(pair_id), **progress())
+                           prev_id=prev["pair_id"] if prev else None,
+                           prefetch=next_pair(skip_id=pair_id), **progress())
 
 
 @app.route("/pair/<int:pair_id>", methods=["POST"])
@@ -222,6 +241,12 @@ def image(relpath):
 @app.cli.command("init-db")
 def init_db():
     db().executescript(SCHEMA)
+    columns = [r["name"] for r in db().execute("PRAGMA table_info(pairs)")]
+    if "shuffle" not in columns:
+        # databases created before the target-based assignment; random() is per row here
+        db().execute("ALTER TABLE pairs ADD COLUMN shuffle INTEGER NOT NULL DEFAULT 0")
+        db().execute("UPDATE pairs SET shuffle = abs(random())")
+        db().commit()
     db().execute("PRAGMA journal_mode = WAL")
     click.echo(f"initialised {app.config['DB_PATH']}")
 
@@ -265,6 +290,21 @@ def list_users():
            GROUP BY u.id ORDER BY u.email""").fetchall()
     for r in rows:
         click.echo(f"{r['email']}\t{'active' if r['active'] else 'removed'}\t{r['answers']}")
+
+
+@app.cli.command("progress")
+def progress_cmd():
+    target = app.config["TARGET"]
+    rows = db().execute(
+        """SELECT n, COUNT(*) AS pairs FROM
+           (SELECT COUNT(l.user_id) AS n FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
+            GROUP BY p.id)
+           GROUP BY n ORDER BY n""").fetchall()
+    total = sum(r["pairs"] for r in rows)
+    complete = sum(r["pairs"] for r in rows if r["n"] >= target)
+    click.echo(f"{complete} / {total} pairs have >= {target} answers")
+    for r in rows:
+        click.echo(f"  {r['n']} answers: {r['pairs']} pairs")
 
 
 @app.cli.command("export")
