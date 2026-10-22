@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 {% block body %}
 <header>
-  <span>{{ session.name }} · you: {{ done }} answered · overall: {{ counted }} / {{ needed }}</span>
+  <span>{{ session.name }}{% if size %} · batch {{ batch }} · {{ in_batch }} / {{ size }}{% endif %}</span>
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
 </header>
 <div class="card">
-  {% if total == 0 %}
+  {% if state == "empty" %}
   <p class="question">No pairs are loaded yet.</p>
   <p>Check back later.</p>
-  {% elif counted >= needed %}
-  <p class="question">All done — thank you.</p>
-  <p>Every pair has enough answers.</p>
+  {% elif state == "batch" %}
+  <p class="question">Batch {{ batch }} done — thank you!</p>
+  {% if more %}
+  <p>You can stop here. If you would like to help more, start another batch of {{ size }}.</p>
+  <form method="post" action="{{ url_for('more') }}"><button>Help more: another {{ size }}</button></form>
+  {% else %}
+  <p>There is nothing left for you to label.</p>
+  {% endif %}
   {% else %}
   <p class="question">Nothing left for you — thank you.</p>
   <p>You have answered every pair that still needs answers; the rest are waiting for other annotators.</p>

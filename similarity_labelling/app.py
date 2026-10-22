@@ -49,9 +49,10 @@ CREATE TABLE IF NOT EXISTS pairs (
     is_check INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS users (
-    id     INTEGER PRIMARY KEY,
-    email  TEXT UNIQUE NOT NULL,
-    active INTEGER NOT NULL DEFAULT 1
+    id      INTEGER PRIMARY KEY,
+    email   TEXT UNIQUE NOT NULL,
+    active  INTEGER NOT NULL DEFAULT 1,
+    batches INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS labels (
     user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -88,6 +89,8 @@ app.config.update(
     IMAGE_ROOT=os.environ.get("LABELWEB_IMAGES", "images"),
     USE_X_ACCEL=use_x_accel,
     TARGET=int(os.environ.get("LABELWEB_TARGET", "3")),
+    # pages per batch; 0 = one per query
+    BATCH=int(os.environ.get("LABELWEB_BATCH", "0")),
     # 1: any verified Google account may sign in; 0: only emails added with allow-email
     OPEN_SIGNUP=os.environ.get("LABELWEB_OPEN_SIGNUP", "0") == "1",
     # gallery audit sheets: one directory per sheet; empty passcode closes the audit
@@ -141,38 +144,61 @@ def safe_next(path):
     return path if path and path.startswith("/") and not path.startswith("//") else url_for("index")
 
 
+def batch_size():
+    """Pages per batch: LABELWEB_BATCH, or else one per query (distinct img_a of the real pairs)."""
+    return app.config["BATCH"] or db().execute(
+        "SELECT COUNT(DISTINCT img_a) FROM pairs WHERE is_check = 0").fetchone()[0]
+
+
 def progress():
-    done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?",
-                        (session["user_id"],)).fetchone()[0]
-    total = db().execute("SELECT COUNT(*) FROM pairs WHERE is_check = 0").fetchone()[0]
-    # answers that count towards the target; extra answers beyond it, and attention checks, are not
-    counted = db().execute(
-        """SELECT COALESCE(SUM(MIN(n, ?)), 0) FROM
-           (SELECT COUNT(*) AS n FROM labels l JOIN pairs p ON p.id = l.pair_id
-            WHERE p.is_check = 0 GROUP BY l.pair_id)""",
-        (app.config["TARGET"],)).fetchone()[0]
-    return {"done": done, "total": total, "counted": counted,
-            "needed": total * app.config["TARGET"]}
+    """This annotator's own position: answers so far, batch number, place within the batch."""
+    uid = session["user_id"]
+    done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?", (uid,)).fetchone()[0]
+    allowed = db().execute("SELECT batches FROM users WHERE id = ?", (uid,)).fetchone()[0]
+    size = batch_size()
+    batch = min(done // size + 1, allowed) if size else 1
+    return {"done": done, "size": size, "batch": batch, "allowed": allowed,
+            "in_batch": done - (batch - 1) * size}
 
 
 def next_pair(skip_id=None):
     """The pair this annotator should see next, or None when there is nothing left for them.
 
-    Within the fewest-answers level, a pair whose query (img_a) differs from the one this
-    annotator saw last comes first, so the same query is not shown twice in a row.
+    A batch shows each query (img_a) once: pairs whose query this annotator has not yet seen
+    in the current batch come first; only when none is left does a query repeat. Then the
+    fewest answers so far, then the fixed random order. Attention checks are ordinary
+    candidates, so they fall inside the batch and use up their query's slot.
     """
-    last = db().execute(
-        """SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
-           WHERE l.user_id = ? ORDER BY l.rowid DESC LIMIT 1""",
-        (session["user_id"],)).fetchone()
+    uid = session["user_id"]
+    size = batch_size()
+    done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?", (uid,)).fetchone()[0]
+    start = (done // size) * size if size else 0
     return db().execute(
-        """SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
-           WHERE p.id IS NOT ?
+        """WITH used AS (SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
+                         WHERE l.user_id = :uid ORDER BY l.rowid LIMIT -1 OFFSET :start)
+           SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
+           WHERE p.id IS NOT :skip
            GROUP BY p.id
-           HAVING COUNT(l.user_id) < ? AND COALESCE(SUM(l.user_id = ?), 0) = 0
-           ORDER BY COUNT(l.user_id), p.img_a IS ?, p.shuffle LIMIT 1""",
-        (skip_id, app.config["TARGET"], session["user_id"],
-         last["img_a"] if last else None)).fetchone()
+           HAVING COUNT(l.user_id) < :target AND COALESCE(SUM(l.user_id = :uid), 0) = 0
+           ORDER BY p.img_a IN (SELECT img_a FROM used), COUNT(l.user_id), p.shuffle
+           LIMIT 1""",
+        {"uid": uid, "start": start, "skip": skip_id, "target": app.config["TARGET"]}).fetchone()
+
+
+def overall():
+    """Project-wide numbers for /status."""
+    target = app.config["TARGET"]
+    total = db().execute("SELECT COUNT(*) FROM pairs WHERE is_check = 0").fetchone()[0]
+    hist = db().execute(
+        """SELECT n, COUNT(*) AS pairs FROM
+           (SELECT COUNT(l.user_id) AS n FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
+            WHERE p.is_check = 0 GROUP BY p.id)
+           GROUP BY n ORDER BY n""").fetchall()
+    # answers that count towards the target; extra answers beyond it, and checks, do not
+    counted = sum(min(r["n"], target) * r["pairs"] for r in hist)
+    complete = sum(r["pairs"] for r in hist if r["n"] >= target)
+    return {"total": total, "target": target, "hist": hist, "counted": counted,
+            "needed": total * target, "complete": complete}
 
 
 @app.route("/login")
@@ -220,10 +246,25 @@ def logout():
 @app.route("/")
 @login_required
 def index():
+    prog = progress()
+    total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
+    if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
+        # batch finished: stop here, or opt in to another one
+        return render_template("done.html", state="batch", more=next_pair() is not None, **prog)
     row = next_pair()
     if row is None:
-        return render_template("done.html", **progress())
+        return render_template("done.html", state="empty" if total == 0 else "nothing", **prog)
     return redirect(url_for("pair", pair_id=row["id"]))
+
+
+@app.route("/more", methods=["POST"])
+@login_required
+def more():
+    prog = progress()
+    if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
+        db().execute("UPDATE users SET batches = batches + 1 WHERE id = ?", (session["user_id"],))
+        db().commit()
+    return redirect(url_for("index"))
 
 
 @app.route("/pair/<int:pair_id>")
@@ -252,6 +293,12 @@ def label(pair_id):
         abort(400)
     if db().execute("SELECT 1 FROM pairs WHERE id = ?", (pair_id,)).fetchone() is None:
         abort(404)
+    answered = db().execute("SELECT 1 FROM labels WHERE user_id = ? AND pair_id = ?",
+                            (session["user_id"], pair_id)).fetchone()
+    prog = progress()
+    if not answered and prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
+        # a new answer past the end of the batch (a stale tab): show the batch-done page instead
+        return redirect(url_for("index"))
     db().execute(
         """INSERT INTO labels (user_id, pair_id, label) VALUES (?, ?, ?)
            ON CONFLICT (user_id, pair_id)
@@ -285,6 +332,9 @@ def init_db():
         db().commit()
     if "is_check" not in columns:
         db().execute("ALTER TABLE pairs ADD COLUMN is_check INTEGER NOT NULL DEFAULT 0")
+        db().commit()
+    if "batches" not in [r["name"] for r in db().execute("PRAGMA table_info(users)")]:
+        db().execute("ALTER TABLE users ADD COLUMN batches INTEGER NOT NULL DEFAULT 1")
         db().commit()
     db().execute("PRAGMA journal_mode = WAL")
     click.echo(f"initialised {app.config['DB_PATH']}")

@@ -25,7 +25,7 @@ from flask import (Blueprint, Response, abort, current_app, redirect, render_tem
                    request, send_from_directory, session, url_for)
 from werkzeug.security import safe_join
 
-from app import app, db, login_required
+from app import app, batch_size, db, login_required, overall, safe_next
 
 bp = Blueprint("audit", __name__, url_prefix="/audit")
 
@@ -72,7 +72,7 @@ def audit_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not has_access():
-            return redirect(url_for("audit.index"))
+            return redirect(url_for("audit.index", next=request.path))
         return view(*args, **kwargs)
     return login_required(wrapped)
 
@@ -88,7 +88,8 @@ def index():
         if passcode and secrets.compare_digest(typed, passcode.strip().upper()):
             db().execute("INSERT OR IGNORE INTO audit_access (user_id) VALUES (?)", (session["user_id"],))
             db().commit()
-            return redirect(url_for("audit.index"))
+            nxt = request.args.get("next")
+            return redirect(safe_next(nxt) if nxt else url_for("audit.index"))
         error = "Wrong passcode." if passcode else "The audit is closed."
     return render_template("audit_index.html", access=has_access(), error=error,
                            sheets=sheets() if has_access() else [],
@@ -159,6 +160,30 @@ def asset(sheet, asset):
         resp.mimetype = mimetypes.guess_type(asset)[0] or "application/octet-stream"
         return resp
     return send_from_directory(path, asset)
+
+
+@app.route("/status")
+@audit_required
+def status():
+    """Overall progress of the pair task and the audit; behind the same passcode as the audit."""
+    size = batch_size()
+    annotators = db().execute(
+        """SELECT u.email, u.active, COUNT(l.pair_id) AS answers,
+                  COALESCE(SUM(p.is_check), 0) AS checks,
+                  COALESCE(SUM(p.is_check AND l.label = 'no'), 0) AS correct,
+                  MAX(l.updated_at) AS last
+           FROM users u JOIN labels l ON l.user_id = u.id JOIN pairs p ON p.id = l.pair_id
+           GROUP BY u.id ORDER BY answers DESC""").fetchall()
+    audit = db().execute(
+        """SELECT s.user_id, s.sheet, s.state, s.updated_ms, u.email FROM audit_state s
+           JOIN users u ON u.id = s.user_id ORDER BY s.sheet, s.user_id""").fetchall()
+    audit_rows = [(labeller_id(r["user_id"]), r["email"], r["sheet"],
+                   len(json.loads(r["state"]).get("labels", {})),
+                   len(json.loads(r["state"]).get("confirmed", {})),
+                   time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["updated_ms"] / 1000)))
+                  for r in audit]
+    return render_template("status.html", o=overall(), size=size, annotators=annotators,
+                           audit=audit_rows)
 
 
 @app.cli.command("audit-export")
