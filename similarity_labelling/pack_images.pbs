@@ -1,0 +1,16 @@
+#!/bin/bash -l
+#PBS -N pack_label_imgs
+#PBS -l select=1:ncpus=1:mem=8GB
+#PBS -l walltime=2:00:00
+#PBS -o /work/SAIVT/LOGO/logs/labelling/
+#PBS -e /work/SAIVT/LOGO/logs/labelling/
+# Pack the images of a pairs CSV into one tar for the Nectar labelling VM.
+# Smoke test: qsub -v PAIRS=<csv with ~20 rows>,OUT=/work/SAIVT/LOGO/labelling/smoke pack_images.pbs
+# Full run:   qsub -v PAIRS=<pairs csv> pack_images.pbs
+set -eo pipefail
+mkdir -p /work/SAIVT/LOGO/logs/labelling
+OUT=${OUT:-/work/SAIVT/LOGO/labelling/pack}
+echo "pairs: $PAIRS  out: $OUT"
+cd "$HOME/workspace/Logo-dataset-projects/similarity_labelling"
+$HOME/.conda/envs/10MLOGO/bin/python -u pack_images.py --pairs "$PAIRS" --out "$OUT"
+ls -la "$OUT"

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body %}
+<header>
+  <span>{{ session.name }} · {{ done }} / {{ total }} labelled</span>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+<div class="card">
+  {% if total == 0 %}
+  <p class="question">No pairs are loaded yet.</p>
+  <p>Check back later.</p>
+  {% else %}
+  <p class="question">All done — thank you.</p>
+  <p>You have labelled every pair. To change an answer, go to
+     <a href="{{ url_for('pair', pair_id=1) }}">the first pair</a> and step through.</p>
+  {% endif %}
+</div>
+{% endblock %}

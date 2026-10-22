@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block body %}
+<header>
+  <span>{{ session.name }} · {{ done }} / {{ total }} labelled</span>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+<div class="bar"><div style="width: {{ (100 * done / total) if total else 0 }}%"></div></div>
+
+<p class="question">Are these two logos similar?</p>
+<div class="pair">
+  <figure><img src="{{ url_for('image', relpath=pair.img_a) }}" alt="Logo A"></figure>
+  <figure><img src="{{ url_for('image', relpath=pair.img_b) }}" alt="Logo B"></figure>
+</div>
+
+<form method="post" class="answers" id="answers">
+  {% for value, key in [('yes', 'Y'), ('no', 'N'), ('unsure', 'U')] %}
+  <button name="label" value="{{ value }}" class="{{ value }}{% if current == value %} chosen{% endif %}">
+    {{ value | capitalize }}<kbd>{{ key }}</kbd>
+  </button>
+  {% endfor %}
+</form>
+
+<nav>
+  {% if prev_id %}<a id="prev" href="{{ url_for('pair', pair_id=prev_id) }}">← Previous<kbd>B</kbd></a>{% else %}<span></span>{% endif %}
+  <span>Pair {{ pair.id }}</span>
+</nav>
+
+{% if prefetch %}
+<link rel="prefetch" href="{{ url_for('image', relpath=prefetch.img_a) }}">
+<link rel="prefetch" href="{{ url_for('image', relpath=prefetch.img_b) }}">
+{% endif %}
+
+<script>
+  const keys = { y: "yes", n: "no", u: "unsure", "1": "yes", "2": "no", "3": "unsure" };
+  let sent = false;
+  document.getElementById("answers").addEventListener("submit", () => { sent = true; });
+  document.addEventListener("keydown", (e) => {
+    if (sent || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (keys[k]) {
+      document.querySelector(`#answers button[value="${keys[k]}"]`).click();
+    } else if (k === "b" && document.getElementById("prev")) {
+      location.href = document.getElementById("prev").href;
+    }
+  });
+</script>
+{% endblock %}

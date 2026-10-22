@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="card">
+  <h1 class="question">Logo similarity</h1>
+  <p id="msg" class="flash" {% if configured %}hidden{% endif %}>
+    {% if not configured %}Sign-in is not configured yet.{% endif %}
+  </p>
+  <button id="google" {% if not configured %}disabled{% endif %}>Sign in with Google</button>
+</div>
+
+{% if configured %}
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut }
+    from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+  const auth = getAuth(initializeApp({{ firebase | tojson }}));
+  const msg = document.getElementById("msg");
+  const button = document.getElementById("google");
+  const show = (text) => { msg.textContent = text; msg.hidden = false; };
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      const idToken = await cred.user.getIdToken();
+      // the Flask session is the login from here on; Firebase only vouches for the email once
+      await signOut(auth);
+      const r = await fetch("{{ url_for('session_login') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      if (r.ok) { location.href = "{{ url_for('index') }}"; return; }
+      show((await r.json()).error);
+    } catch (e) {
+      show(e.code === "auth/popup-blocked"
+        ? "Your browser blocked the sign-in window. Allow pop-ups for this site and try again."
+        : "Sign-in failed (" + (e.code || e.message) + ").");
+    }
+    button.disabled = false;
+  });
+</script>
+{% endif %}
+{% endblock %}

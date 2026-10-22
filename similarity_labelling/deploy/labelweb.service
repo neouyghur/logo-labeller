@@ -1,0 +1,15 @@
+[Unit]
+Description=Logo similarity labelling site (gunicorn)
+After=network.target
+
+[Service]
+User=labelweb
+Group=labelweb
+UMask=0027
+WorkingDirectory=/srv/labelweb/app
+EnvironmentFile=/etc/labelweb.env
+ExecStart=/srv/labelweb/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 app:app
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
