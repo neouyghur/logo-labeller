@@ -1,0 +1,272 @@
+{# The guide: slides over the pair page. Mandatory once (intro=True: no way out but the last
+   slide's button, which records it); afterwards "Replay the guide" opens it with a close button.
+   The example logos are invented marks drawn here, not real brands. #}
+{% macro bird(color="#2457c5") %}
+<svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="{{ color }}"/>
+<path d="M28 64 Q44 38 60 58 Q76 38 92 64 Q76 52 60 74 Q44 52 28 64Z" fill="#fff"/></svg>
+{% endmacro %}
+{% macro star(color="#d23a2a") %}
+<svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="{{ color }}"/>
+<polygon points="60,24 70,50 98,50 76,67 84,94 60,78 36,94 44,67 22,50 50,50" fill="#fff"/></svg>
+{% endmacro %}
+{% macro script(word, color="#d23a2a", leaf=false) %}
+<svg viewBox="0 0 160 120" aria-hidden="true">
+{% if leaf %}<path d="M80 18 Q104 30 92 58 Q80 64 72 56 Q64 34 80 18Z" fill="#3a9a5b"/>{% endif %}
+<text x="80" y="{{ 96 if leaf else 76 }}" text-anchor="middle" font-family="'Brush Script MT','Segoe Script',cursive"
+      font-style="italic" font-size="44" fill="{{ color }}">{{ word }}</text></svg>
+{% endmacro %}
+{% macro wordmark(word, color="#1d1d1b") %}
+<svg viewBox="0 0 160 120" aria-hidden="true"><rect x="12" y="34" width="136" height="52" rx="12" fill="{{ color }}"/>
+<text x="80" y="72" text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
+      font-weight="900" font-size="30" letter-spacing="3" fill="#fff">{{ word }}</text></svg>
+{% endmacro %}
+{% macro duo(a, b, verdict=None, kind="", rough=false) %}
+<div class="duo">
+  <figure>{{ a }}</figure>
+  <figure{% if rough %} class="rough"{% endif %}>{{ b }}</figure>
+</div>
+{% if verdict %}<p class="verdict {{ kind }}">{{ verdict }}</p>{% endif %}
+{% endmacro %}
+
+<style>
+  .intro { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+           background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(6px); padding: 16px; }
+  .intro[hidden] { display: none; }
+  .deck { background: var(--card); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 640px;
+          max-height: calc(100vh - 32px); display: flex; flex-direction: column; overflow: hidden;
+          box-shadow: 0 20px 60px rgb(0 0 0 / .18); }
+  .deck-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 0;
+              font-size: 13px; color: var(--muted); }
+  .deck-top .x { background: none; border: 0; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
+  .viewport { overflow: hidden; flex: 1; }
+  .track { display: flex; transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  .slide { flex: 0 0 100%; padding: 8px 28px 16px; overflow-y: auto; max-height: calc(100vh - 150px); }
+  .slide h2 { font-size: 24px; margin: 6px 0 8px; }
+  .slide .lead { font-size: 17px; margin: 0 0 14px; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+  .duo figure { margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 10px; height: 140px;
+                display: flex; align-items: center; justify-content: center; padding: 10px; overflow: hidden; }
+  .duo svg { width: 100%; height: 100%; }
+  .duo .rough { background: #9a9a94; }
+  .duo .rough svg { filter: blur(1.6px); transform: scale(1.35) translate(8%, 6%); }
+  .verdict { display: inline-block; font-weight: 700; padding: 4px 12px; border-radius: 999px; margin: 2px 0 6px;
+             border: 2px solid currentColor; }
+  .verdict.yes { color: var(--yes); } .verdict.no { color: var(--no); } .verdict.unsure { color: var(--unsure); }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px; text-align: center; font-size: 14px; }
+  .tile b { display: flex; justify-content: center; height: 32px; margin-bottom: 6px; color: var(--focus); }
+  .tile b svg { width: 32px; height: 32px; }
+  .tile .aa { font: 700 26px/32px Georgia, serif; }
+  .tile.dim { opacity: .65; }
+  .ignore { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .ignore li { border: 1px dashed var(--line); border-radius: 999px; padding: 4px 12px; font-size: 14px;
+               text-decoration: line-through; text-decoration-color: var(--no); }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0; }
+  .keys div { border: 2px solid currentColor; border-radius: 10px; padding: 12px 8px; text-align: center; }
+  .keys strong { display: block; font-size: 18px; }
+  .keys span { font-size: 13px; color: var(--fg); }
+  .float { display: flex; justify-content: center; gap: 16px; margin: 18px 0; }
+  .float figure { margin: 0; width: 96px; height: 96px; background: #fff; border: 1px solid var(--line);
+                  border-radius: 14px; padding: 10px; animation: bob 3s ease-in-out infinite; }
+  .float figure:nth-child(2) { animation-delay: .4s; } .float figure:nth-child(3) { animation-delay: .8s; }
+  .float svg { width: 100%; height: 100%; }
+  @keyframes bob { 50% { transform: translateY(-8px) rotate(-2deg); } }
+  .slide.on .tile, .slide.on .duo figure, .slide.on .verdict { animation: pop .5s backwards; }
+  .slide.on .tile:nth-child(2), .slide.on .duo figure:nth-child(2) { animation-delay: .08s; }
+  .slide.on .tile:nth-child(3) { animation-delay: .16s; } .slide.on .tile:nth-child(4) { animation-delay: .24s; }
+  .slide.on .tile:nth-child(5) { animation-delay: .32s; } .slide.on .tile:nth-child(6) { animation-delay: .4s; }
+  .slide.on .verdict { animation-delay: .35s; }
+  @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+  .quiz { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 10px 0; }
+  .quiz .duo figure { height: 110px; }
+  .quiz .pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .quiz .pick button { padding: 8px; border-radius: 8px; border: 2px solid currentColor; background: var(--card);
+                       font-weight: 600; cursor: pointer; }
+  .quiz .pick .yes { color: var(--yes); } .quiz .pick .no { color: var(--no); } .quiz .pick .unsure { color: var(--unsure); }
+  .quiz .pick button:disabled { cursor: default; opacity: .45; }
+  .quiz .pick button.picked { opacity: 1; outline: 3px solid var(--focus); outline-offset: 2px; }
+  .quiz .fb { margin: 8px 0 0; font-size: 14px; min-height: 1.4em; }
+  .deck-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+              padding: 12px 16px; border-top: 1px solid var(--line); }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: all .3s; }
+  .dots i.on { background: var(--focus); width: 22px; border-radius: 4px; }
+  .deck-nav button { white-space: nowrap; padding: 10px 18px; border-radius: 8px; border: 0; cursor: pointer; font-weight: 600; }
+  .deck-nav .back { background: none; color: var(--muted); }
+  .deck-nav .back:disabled { visibility: hidden; }
+  .deck-nav .next { background: var(--focus); color: #fff; }
+  .deck-nav .next:disabled { opacity: .45; cursor: default; }
+  @media (max-width: 520px) {
+    .slide { padding: 6px 16px 12px; }
+    .slide h2 { font-size: 20px; }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .duo figure { height: 110px; }
+    .deck-nav { padding: 10px 12px; gap: 8px; }
+    .deck-nav button { padding: 10px 12px; }
+    .dots { gap: 4px; }
+    .dots i.on { width: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .track { transition: none; }
+    .float figure, .slide.on * { animation: none !important; }
+  }
+</style>
+
+<div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title" {% if not intro %}hidden{% endif %}>
+  <div class="deck">
+    <div class="deck-top">
+      <span id="intro-count"></span>
+      {% if not intro %}<button class="x" id="intro-close" aria-label="Close the guide">×</button>{% endif %}
+    </div>
+    <div class="viewport">
+      <div class="track" id="intro-track">
+
+        <section class="slide">
+          <h2 id="intro-title">Welcome! 👋</h2>
+          <p class="lead">You'll see <strong>30 pairs of logos</strong>. For each pair, tell us whether
+             the two logos look similar. It takes about 3 minutes, and you get a certificate at the end.</p>
+          <div class="float"><figure>{{ bird() }}</figure><figure>{{ wordmark("NOVA", "#6b3fa0") }}</figure><figure>{{ star("#e08a00") }}</figure></div>
+          <p class="muted">First, a 1-minute guide on what we mean by “similar”.</p>
+        </section>
+
+        <section class="slide">
+          <h2>The one question</h2>
+          <p class="lead">If you saw one of these logos briefly, <strong>could you mistake it for the other</strong>,
+             or would it strongly remind you of the other?</p>
+          {{ duo(bird("#2457c5"), bird("#159c8c"), "Similar → Yes", "yes") }}
+          <p>Logos can be similar without being identical. Here only the colour changed.</p>
+        </section>
+
+        <section class="slide">
+          <h2>What to look at</h2>
+          <p class="lead">Let these shape your overall impression. No need to score each one.</p>
+          <div class="tiles">
+            <div class="tile"><b><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="16" r="7"/><path d="M19 9h9v14h-9z"/></svg></b>Shape &amp; silhouette</div>
+            <div class="tile"><b><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="10" height="10" rx="2"/><path d="M18 11h10M18 16h10M18 21h6"/></svg></b>Layout of icon &amp; text</div>
+            <div class="tile"><b><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 Q10 8 16 15 Q22 8 28 18 Q22 14 16 21 Q10 14 4 18Z"/></svg></b>Symbols &amp; imagery</div>
+            <div class="tile"><b><span class="aa">Aa</span></b>Typography</div>
+            <div class="tile"><b><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4 27 10v12L16 28 5 22V10z"/><path d="M5 10l11 6 11-6M16 16v12"/></svg></b>Style: flat, 3D, hand-drawn…</div>
+            <div class="tile dim"><b><svg viewBox="0 0 32 32"><circle cx="9" cy="16" r="5" fill="#d23a2a"/><circle cx="16" cy="16" r="5" fill="#e08a00"/><circle cx="23" cy="16" r="5" fill="#2457c5"/></svg></b>Colour, rarely on its own</div>
+          </div>
+        </section>
+
+        <section class="slide">
+          <h2>Colour is a trap</h2>
+          <p class="lead">Both are red, but the shapes have nothing in common.</p>
+          {{ duo(star("#d23a2a"), script("Kivo", "#d23a2a"), "Not similar → No", "no") }}
+          <p>Colour matters, but it should rarely decide your answer alone.</p>
+        </section>
+
+        <section class="slide">
+          <h2>Look past the photo</h2>
+          <p class="lead">Blur, cropping, size or background come from how the image was collected,
+             not from the design.</p>
+          {{ duo(bird("#2457c5"), bird("#2457c5"), "Same design → Yes", "yes", rough=true) }}
+          <p>Also ignore:</p>
+          <ul class="ignore"><li>whether you know the brand</li><li>whether you like it</li><li>what the company sells</li></ul>
+        </section>
+
+        <section class="slide">
+          <h2>Design, not words</h2>
+          <p class="lead">Different words in the same layout and font can look very similar…</p>
+          {{ duo(wordmark("NOVA"), wordmark("LUMA"), "Similar → Yes", "yes") }}
+          <p class="lead">…and the same word in totally different styles can look different.</p>
+          {{ duo(wordmark("NOVA"), script("Nova", "#3a9a5b", leaf=true), "Not similar → No", "no") }}
+        </section>
+
+        <section class="slide">
+          <h2>Your three answers</h2>
+          <div class="keys">
+            <div style="color: var(--yes)"><strong>Yes <kbd>Y</kbd></strong><span>highly similar: could be mistaken for each other</span></div>
+            <div style="color: var(--no)"><strong>No <kbd>N</kbd></strong><span>dissimilar: little in common beyond surface traits</span></div>
+            <div style="color: var(--unsure)"><strong>Unsure <kbd>U</kbd></strong><span>in between, or an image won't load</span></div>
+          </div>
+          <p class="lead">Go with your first instinct. If you deliberate for long, the pair is probably in
+             the middle, so choose <strong>Unsure</strong>.</p>
+          <p class="muted">Changed your mind? Press <kbd>B</kbd> or “← Previous” to go back.</p>
+        </section>
+
+        <section class="slide" id="intro-quiz">
+          <h2>Quick practice</h2>
+          <p class="lead">Two warm-ups. Nothing here is recorded.</p>
+          <div class="quiz" data-answer="yes" data-why="Same emblem; the blur and the grey background are just image quality.">
+            {{ duo(bird("#e08a00"), bird("#e08a00"), rough=true) }}
+            <div class="pick"><button class="yes" value="yes">Yes</button><button class="no" value="no">No</button><button class="unsure" value="unsure">Unsure</button></div>
+            <p class="fb"></p>
+          </div>
+          <div class="quiz" data-answer="no" data-why="Same blue, but a badge versus a script wordmark: colour alone doesn't make them similar.">
+            {{ duo(star("#2457c5"), script("Orla", "#2457c5")) }}
+            <div class="pick"><button class="yes" value="yes">Yes</button><button class="no" value="no">No</button><button class="unsure" value="unsure">Unsure</button></div>
+            <p class="fb"></p>
+          </div>
+        </section>
+
+      </div>
+    </div>
+    <form class="deck-nav" method="post" action="{{ url_for('guide') }}" id="intro-form">
+      <button type="button" class="back" id="intro-back">← Back</button>
+      <div class="dots" id="intro-dots"></div>
+      <button type="button" class="next" id="intro-next">Next →</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  const intro = document.getElementById("intro");
+  const track = document.getElementById("intro-track");
+  const slides = [...track.children];
+  const back = document.getElementById("intro-back");
+  const next = document.getElementById("intro-next");
+  const dots = document.getElementById("intro-dots");
+  const count = document.getElementById("intro-count");
+  const quizzes = [...document.querySelectorAll("#intro-quiz .quiz")];
+  const mandatory = {{ "true" if intro else "false" }};
+  let i = 0;
+  slides.forEach(() => dots.appendChild(document.createElement("i")));
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    track.style.transform = `translateX(${-100 * i}%)`;
+    slides.forEach((s, k) => s.classList.toggle("on", k === i));
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
+    count.textContent = `Guide · ${i + 1} of ${slides.length}`;
+    back.disabled = i === 0;
+    const last = i === slides.length - 1;
+    const narrow = matchMedia("(max-width: 520px)").matches;
+    next.textContent = last ? (mandatory ? (narrow ? "Start →" : "Start labelling →") : "Done") : "Next →";
+    // the practice must be answered before labelling starts
+    next.disabled = last && quizzes.some((q) => !q.dataset.done);
+  }
+
+  quizzes.forEach((q) => q.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    const right = b.value === q.dataset.answer;
+    q.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+    b.classList.add("picked");
+    const fb = q.querySelector(".fb");
+    fb.textContent = (right ? "✓ Right! " : `✗ We'd say ${q.dataset.answer}. `) + q.dataset.why;
+    fb.style.color = right ? "var(--yes)" : "var(--no)";
+    q.dataset.done = "1";
+    show(i);
+  })));
+
+  function close() { intro.hidden = true; }
+  next.addEventListener("click", () => {
+    if (i < slides.length - 1) return show(i + 1);
+    if (mandatory) document.getElementById("intro-form").submit(); else close();
+  });
+  back.addEventListener("click", () => show(i - 1));
+  const x = document.getElementById("intro-close");
+  if (x) x.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (intro.hidden) return;
+    // the pair page's answer keys are off while the guide is open
+    e.stopImmediatePropagation();
+    if (e.key === "ArrowRight" && !next.disabled) next.click();
+    else if (e.key === "ArrowLeft" && !back.disabled) back.click();
+    else if (e.key === "Escape" && !mandatory) close();
+  }, true);
+  window.openGuide = () => { intro.hidden = false; show(0); };
+  show(0);
+})();
+</script>

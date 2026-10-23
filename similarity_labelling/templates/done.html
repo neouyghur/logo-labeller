@@ -20,6 +20,13 @@
   {% if more %}
   <p>If you would like to help more, start another batch of {{ size }}.</p>
   <form method="post" action="{{ url_for('more') }}"><button>Help more: another {{ size }}</button></form>
+  {% elif ask_passcode %}
+  <form method="post" action="{{ url_for('more') }}">
+    <label for="passcode">Research team: enter the passcode to label more</label>
+    <input id="passcode" name="passcode" autocomplete="off" required>
+    {% if error %}<p class="flash">{{ error }}</p>{% endif %}
+    <button>Label more</button>
+  </form>
   {% endif %}
   {% else %}
   <p class="question">Nothing left for you — thank you.</p>

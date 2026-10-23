@@ -1,7 +1,21 @@
 {% extends "base.html" %}
 {% block body %}
-<div class="card">
-  <h1 class="question">Logo similarity</h1>
+<div class="card welcome">
+  <h1 class="question">Welcome to the Logo Similarity User Study</h1>
+  <p>Thank you for participating! You will see pairs of logos side by side and decide whether they
+     look similar. Each pair takes only a few seconds, and a session is 30 pairs.</p>
+  <p>Our aim is to bridge the gap between how humans perceive visual similarity and how artificial
+     intelligence understands it. We are building a large-scale image retrieval benchmark: a
+     standardized test of how accurately and efficiently computer vision models search for and
+     match images. Your judgments become part of its ground-truth dataset, used to evaluate and
+     improve the next generation of visual search algorithms.</p>
+  <p>This research is conducted by Osman Tursun, Yusuf Efe Ozudogru, Efe Buke and Sinan Kalkan.</p>
+  <p><strong>Your data.</strong> We store your Google email address and name, only to sign you in
+     and to issue your certificate, together with your answers. Nothing else is collected. Before
+     analysis your answers are linked only to a code; your email and name are never published.
+     The data is used exclusively for academic research.</p>
+  <p>Questions? Contact {{ contact_name }} at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+     A short guide opens before your first pair.</p>
   <p id="msg" class="flash" {% if configured %}hidden{% endif %}>
     {% if not configured %}Sign-in is not configured yet.{% endif %}
   </p>

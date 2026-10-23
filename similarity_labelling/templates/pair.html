@@ -1,5 +1,19 @@
 {% extends "base.html" %}
+{% block main_class %}wide{% endblock %}
 {% block body %}
+<style>
+  .layout { display: grid; gap: 24px; }
+  .tips { font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
+          background: var(--card); }
+  .tips summary { cursor: pointer; font-weight: 600; }
+  .tips ul { padding-left: 18px; margin: 8px 0; }
+  .tips li { margin: 4px 0; }
+  @media (min-width: 960px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+  }
+</style>
+<div class="layout">
+<div>
 <header>
   <span>{{ session.name }} · batch {{ batch }} · {{ in_batch }} / {{ size }}</span>
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
@@ -25,12 +39,41 @@
   <span>Pair {{ pair.id }}</span>
 </nav>
 
+</div>
+<aside>
+  <details class="tips" id="tips">
+    <summary>What counts as similar?</summary>
+    <p>Could you mistake one for the other if you saw it briefly, or does one strongly remind you
+       of the other? Judge what you see, not what you know about the companies.</p>
+    <p><strong>Look at:</strong></p>
+    <ul>
+      <li>overall shape and silhouette</li>
+      <li>layout of icon and text</li>
+      <li>symbols and imagery</li>
+      <li>typography</li>
+      <li>style (flat, outlined, 3D…)</li>
+      <li>color, but rarely on its own</li>
+    </ul>
+    <p><strong>Ignore:</strong> brand familiarity, image quality (resolution, cropping,
+       background) and what the text means.</p>
+    <p><strong style="color: var(--yes)">Yes</strong>: highly similar ·
+       <strong style="color: var(--no)">No</strong>: dissimilar ·
+       <strong style="color: var(--unsure)">Unsure</strong>: in between, or an image won't load.</p>
+    <p><button class="link" type="button" onclick="openGuide()">Replay the guide with examples</button></p>
+  </details>
+</aside>
+</div>
+
+{% include "_intro.html" %}
+
 {% if prefetch %}
 <link rel="prefetch" href="{{ url_for('image', relpath=prefetch.img_a) }}">
 <link rel="prefetch" href="{{ url_for('image', relpath=prefetch.img_b) }}">
 {% endif %}
 
 <script>
+  // the tips stay open beside the pair on wide screens; on phones they fold under it
+  if (matchMedia("(min-width: 960px)").matches) document.getElementById("tips").open = true;
   const keys = { y: "yes", n: "no", u: "unsure", "1": "yes", "2": "no", "3": "unsure" };
   let sent = false;
   document.getElementById("answers").addEventListener("submit", () => { sent = true; });

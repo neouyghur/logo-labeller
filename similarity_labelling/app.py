@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS users (
     email   TEXT UNIQUE NOT NULL,
     active  INTEGER NOT NULL DEFAULT 1,
     batches INTEGER NOT NULL DEFAULT 1,
-    name    TEXT NOT NULL DEFAULT ''
+    name    TEXT NOT NULL DEFAULT '',
+    guided  TEXT  -- when they finished the guide slides; NULL: the slides open over the first pair
 );
 CREATE TABLE IF NOT EXISTS labels (
     user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -125,6 +126,9 @@ app.config.update(
     # gallery audit sheets: one directory per sheet; empty passcode closes the audit
     AUDIT_ROOT=os.environ.get("LABELWEB_AUDIT", "audit"),
     AUDIT_PASSCODE=os.environ.get("LABELWEB_AUDIT_PASSCODE", ""),
+    # shown on the welcome page and in the guide slides
+    CONTACT_NAME=os.environ.get("LABELWEB_CONTACT_NAME", "Osman Tursun"),
+    CONTACT_EMAIL=os.environ.get("LABELWEB_CONTACT_EMAIL", "osman.tursun@qut.edu.au"),
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=use_x_accel,
     # the Firebase web config; these values are public by design
@@ -265,8 +269,25 @@ def certificate(uid):
     return db().execute("SELECT * FROM certificates WHERE user_id = ?", (uid,)).fetchone()
 
 
+def passcode_ok(typed):
+    """The shared team passcode (LABELWEB_AUDIT_PASSCODE): case and surrounding spaces don't matter."""
+    passcode = app.config["AUDIT_PASSCODE"]
+    return bool(passcode) and secrets.compare_digest(typed.strip().upper(), passcode.strip().upper())
+
+
+def has_passcode(uid):
+    return db().execute("SELECT 1 FROM audit_access WHERE user_id = ?", (uid,)).fetchone() is not None
+
+
+def grant_passcode(uid):
+    db().execute("INSERT OR IGNORE INTO audit_access (user_id) VALUES (?)", (uid,))
+    db().commit()
+
+
 def can_do_more(prog):
-    return not app.config["MAX_BATCHES"] or prog["allowed"] < app.config["MAX_BATCHES"]
+    """Past LABELWEB_MAX_BATCHES, only annotators who entered the team passcode get more batches."""
+    return (not app.config["MAX_BATCHES"] or prog["allowed"] < app.config["MAX_BATCHES"]
+            or has_passcode(session["user_id"]))
 
 
 def overall():
@@ -332,6 +353,26 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.context_processor
+def study_contact():
+    return {"contact_name": app.config["CONTACT_NAME"], "contact_email": app.config["CONTACT_EMAIL"]}
+
+
+@app.route("/guide", methods=["POST"])
+@login_required
+def guide():
+    """The annotator finished the guide slides (shown over their first pair); from now on, pairs."""
+    db().execute("UPDATE users SET guided = datetime('now') WHERE id = ? AND guided IS NULL",
+                 (session["user_id"],))
+    db().commit()
+    return redirect(url_for("index"))
+
+
+def guided():
+    return db().execute("SELECT guided FROM users WHERE id = ?",
+                        (session["user_id"],)).fetchone()[0] is not None
+
+
 @app.route("/")
 @login_required
 def index():
@@ -339,8 +380,10 @@ def index():
     total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
     if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
         # batch finished: the certificate, and another batch if allowed
+        left = next_pair() is not None
         return render_template("done.html", state="batch", cert=certificate(session["user_id"]),
-                               more=can_do_more(prog) and next_pair() is not None, **prog)
+                               more=left and can_do_more(prog), ask_passcode=left and not can_do_more(prog),
+                               error=request.args.get("error"), **prog)
     row = next_pair()
     if row is None:
         return render_template("done.html", state="empty" if total == 0 else "nothing", **prog)
@@ -350,6 +393,10 @@ def index():
 @app.route("/more", methods=["POST"])
 @login_required
 def more():
+    if "passcode" in request.form:
+        if not passcode_ok(request.form["passcode"]):
+            return redirect(url_for("index", error="Wrong passcode."))
+        grant_passcode(session["user_id"])
     prog = progress()
     if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"] and can_do_more(prog):
         db().execute("UPDATE users SET batches = batches + 1 WHERE id = ?", (session["user_id"],))
@@ -371,6 +418,7 @@ def pair(pair_id):
         "SELECT pair_id FROM labels WHERE user_id = ? AND rowid < ? ORDER BY rowid DESC LIMIT 1",
         (session["user_id"], current["rowid"] if current else sys.maxsize)).fetchone()
     return render_template("pair.html", pair=p, current=current["label"] if current else None,
+                           intro=not guided(),
                            prev_id=prev["pair_id"] if prev else None,
                            prefetch=next_pair(skip_id=pair_id), **progress())
 
@@ -381,6 +429,9 @@ def label(pair_id):
     value = request.form.get("label")
     if value not in LABELS:
         abort(400)
+    if not guided():
+        # the guide is mandatory: no answers before it is finished
+        return redirect(url_for("pair", pair_id=pair_id))
     if db().execute("SELECT 1 FROM pairs WHERE id = ?", (pair_id,)).fetchone() is None:
         abort(404)
     answered = db().execute("SELECT 1 FROM labels WHERE user_id = ? AND pair_id = ?",
@@ -422,8 +473,7 @@ def verify(code=None):
     row = db().execute("SELECT c.*, u.name FROM certificates c JOIN users u ON u.id = c.user_id "
                        "WHERE c.code = ?", (norm,)).fetchone() if norm else None
     uid = session.get("user_id")
-    staff = uid is not None and db().execute(
-        "SELECT 1 FROM audit_access WHERE user_id = ?", (uid,)).fetchone() is not None
+    staff = uid is not None and has_passcode(uid)
     if request.method == "POST" and row is not None and staff:
         db().execute("UPDATE certificates SET redeemed_at = datetime('now') WHERE code = ? "
                      "AND redeemed_at IS NULL", (norm,))
@@ -463,6 +513,9 @@ def init_db():
         db().commit()
     if "name" not in user_columns:
         db().execute("ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+        db().commit()
+    if "guided" not in user_columns:
+        db().execute("ALTER TABLE users ADD COLUMN guided TEXT")
         db().commit()
     db().execute("PRAGMA journal_mode = WAL")
     click.echo(f"initialised {app.config['DB_PATH']}")

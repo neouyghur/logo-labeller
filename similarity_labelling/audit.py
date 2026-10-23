@@ -16,7 +16,6 @@ import mimetypes
 import os
 import random
 import re
-import secrets
 import time
 from functools import wraps
 
@@ -25,7 +24,8 @@ from flask import (Blueprint, Response, abort, current_app, redirect, render_tem
                    request, send_from_directory, session, url_for)
 from werkzeug.security import safe_join
 
-from app import app, batch_size, db, login_required, overall, safe_next
+from app import (app, batch_size, db, grant_passcode, has_passcode, login_required, overall,
+                 passcode_ok, safe_next)
 
 bp = Blueprint("audit", __name__, url_prefix="/audit")
 
@@ -64,8 +64,7 @@ def sheets():
 
 
 def has_access():
-    return db().execute("SELECT 1 FROM audit_access WHERE user_id = ?",
-                        (session["user_id"],)).fetchone() is not None
+    return has_passcode(session["user_id"])
 
 
 def audit_required(view):
@@ -83,11 +82,8 @@ def index():
     error = None
     passcode = current_app.config["AUDIT_PASSCODE"]
     if request.method == "POST" and not has_access():
-        # a simple shared word: case and surrounding spaces don't matter
-        typed = request.form.get("passcode", "").strip().upper()
-        if passcode and secrets.compare_digest(typed, passcode.strip().upper()):
-            db().execute("INSERT OR IGNORE INTO audit_access (user_id) VALUES (?)", (session["user_id"],))
-            db().commit()
+        if passcode_ok(request.form.get("passcode", "")):
+            grant_passcode(session["user_id"])
             nxt = request.args.get("next")
             return redirect(safe_next(nxt) if nxt else url_for("audit.index"))
         error = "Wrong passcode." if passcode else "The audit is closed."

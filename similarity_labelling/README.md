@@ -5,7 +5,8 @@ Flask + SQLite behind nginx on the Nectar VM `logo-label` (203.101.229.244),
 served at https://203-101-229-244.sslip.io.
 
 Every pair needs `LABELWEB_TARGET` answers (default 3) from different annotators. Each annotator
-does **one batch of 30** (`LABELWEB_BATCH`; `LABELWEB_MAX_BATCHES=0` re-enables "Help more"):
+does **one batch of 30** (`LABELWEB_BATCH`); after it, only those who enter the team passcode
+(the audit one, QUTMETU) get "Help more" for further batches (`LABELWEB_MAX_BATCHES=0`: everyone does):
 21 real pairs and 9 attention checks (`LABELWEB_CHECKS`) at positions fixed per annotator, each
 query at most once. Real pairs go fewest answers first, then a fixed random order; checks are a
 shared pool (a query with another group's logo, answer "no") drawn in a per-annotator order.
@@ -91,6 +92,15 @@ Send annotators the URL; they click **Sign in with Google**. With open sign-up a
 has the URL can label: check `list-users` and block strangers with `remove-email`
 (a removed email stays blocked; its answers stay in the database and in `export`).
 Any address that is a Google account works, including a QUT address registered as one.
+
+## Welcome page and guide
+
+The sign-in page carries the study welcome (purpose, researchers, data statement, contact:
+`LABELWEB_CONTACT_NAME` / `LABELWEB_CONTACT_EMAIL`). The guide is a deck of slides
+(`templates/_intro.html`) that opens over the first pair; it is mandatory: answers are refused
+until its last slide (a two-pair practice) has been answered and "Start labelling" pressed
+(`users.guided`). Its example logos are invented SVG marks drawn in the template. The pair page
+keeps a short "What counts as similar?" panel with a "Replay the guide" button.
 
 ## Attention checks
 

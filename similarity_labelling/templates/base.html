@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Logo Similarity</title>
+<title>Logo Similarity Study</title>
 <style>
   :root {
     --bg: #f6f6f4; --fg: #1d1d1b; --muted: #6b6b66; --card: #ffffff; --line: #dcdcd6;
@@ -51,10 +51,14 @@
   th, td { border-bottom: 1px solid var(--line); padding: 4px 10px; text-align: left; white-space: nowrap; }
   .muted { color: var(--muted); }
   h2 { font-size: 17px; margin-top: 24px; }
+  main.wide { max-width: 1120px; }
+  .welcome { max-width: 560px; }
+  .primary { display: inline-block; padding: 10px 18px; border-radius: 6px; border: 0;
+             background: var(--focus); color: #fff; cursor: pointer; text-decoration: none; }
 </style>
 </head>
 <body>
-<main>
+<main class="{% block main_class %}{% endblock %}">
 {% block body %}{% endblock %}
 </main>
 </body>
