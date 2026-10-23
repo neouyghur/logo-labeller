@@ -22,7 +22,8 @@ Admin commands (run with `flask --app app <command>`, or `sudo labelweb-admin <c
   remove-email EMAIL... revoke access at the next request; their answers are kept
   list-users            emails, access, answer counts
   progress              how many pairs have reached the target number of answers
-  export OUT_DIR        answers.tsv, annotators.tsv, pairs_summary.tsv, annotator_emails.tsv
+  export OUT_DIR        answers.tsv, annotators.tsv, pairs_summary.tsv, participants.tsv,
+                        annotator_emails.tsv
 
 Attention checks are pairs with is_check = 1: a query shown with another query's positive, so
 the right answer is "no". They take the batch's check positions, are drawn in a per-annotator
@@ -51,6 +52,13 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
 LABELS = ("yes", "no", "unsure")
+# the background questions: stored value -> wording; "" is "Prefer not to say"
+AGE_RANGES = {"18-24": "18–24", "25-34": "25–34", "35-44": "35–44", "45-54": "45–54",
+              "55-64": "55–64", "65+": "65 or over"}
+DESIGN = {"none": "None",
+          "hobby": "Hobby or self-taught",
+          "studied": "Studied design (graphic, visual, branding…)",
+          "professional": "Work professionally in design, branding or marketing"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pairs (
@@ -84,6 +92,13 @@ CREATE TABLE IF NOT EXISTS certificates (
     correct     INTEGER NOT NULL,
     issued_at   TEXT NOT NULL DEFAULT (datetime('now')),
     redeemed_at TEXT
+);
+-- the optional background questions, answered once before the guide ('' = prefer not to say)
+CREATE TABLE IF NOT EXISTS profiles (
+    user_id     INTEGER PRIMARY KEY REFERENCES users(id),
+    age_range   TEXT NOT NULL,
+    design      TEXT NOT NULL,
+    answered_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 -- the gallery audit sheets (audit.py)
 CREATE TABLE IF NOT EXISTS audit_access (
@@ -361,6 +376,29 @@ def study_contacts():
     return {"contacts": [m.groups() for m in contacts if m], "year": time.gmtime().tm_year}
 
 
+def has_profile():
+    return db().execute("SELECT 1 FROM profiles WHERE user_id = ?",
+                        (session["user_id"],)).fetchone() is not None
+
+
+@app.route("/about-you", methods=["GET", "POST"])
+@login_required
+def profile():
+    """The background questions, once, before the guide; every question may be left unanswered."""
+    if has_profile():
+        return redirect(url_for("index"))
+    if request.method == "POST":
+        age = request.form.get("age_range", "")
+        design = request.form.get("design", "")
+        if (age and age not in AGE_RANGES) or (design and design not in DESIGN):
+            abort(400)
+        db().execute("INSERT OR IGNORE INTO profiles (user_id, age_range, design) VALUES (?, ?, ?)",
+                     (session["user_id"], age, design))
+        db().commit()
+        return redirect(url_for("index"))
+    return render_template("profile.html", ages=AGE_RANGES, design=DESIGN)
+
+
 @app.route("/guide", methods=["POST"])
 @login_required
 def guide():
@@ -379,6 +417,8 @@ def guided():
 @app.route("/")
 @login_required
 def index():
+    if not has_profile():
+        return redirect(url_for("profile"))
     prog = progress()
     total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
     if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
@@ -410,6 +450,8 @@ def more():
 @app.route("/pair/<int:pair_id>")
 @login_required
 def pair(pair_id):
+    if not has_profile():
+        return redirect(url_for("profile"))
     p = db().execute("SELECT * FROM pairs WHERE id = ?", (pair_id,)).fetchone()
     if p is None:
         abort(404)
@@ -594,7 +636,7 @@ def write_tsv(path, header, rows):
 @click.option("--min-check-accuracy", default=0.8, show_default=True,
               help="annotators below this attention-check accuracy are left out of pairs_summary")
 def export(out_dir, min_check_accuracy):
-    """Write answers, annotators, pairs_summary and annotator_emails TSVs into OUT_DIR."""
+    """Write answers, annotators, pairs_summary, participants and annotator_emails TSVs into OUT_DIR."""
     os.makedirs(out_dir, exist_ok=True)
     users = db().execute("SELECT id, email FROM users ORDER BY id").fetchall()
     # anonymous ids in sign-up order; the email mapping goes to its own file
@@ -636,6 +678,11 @@ def export(out_dir, min_check_accuracy):
                for uid, s in stats.items()])
     write_tsv(os.path.join(out_dir, "annotator_emails.tsv"), ["annotator", "email"],
               [(anon[u["id"]], u["email"]) for u in users])
+    profiles = {r["user_id"]: r for r in db().execute("SELECT * FROM profiles")}
+    write_tsv(os.path.join(out_dir, "participants.tsv"), ["annotator", "age_range", "design_experience"],
+              [(anon[u["id"]], profiles[u["id"]]["age_range"] or "not_said",
+                profiles[u["id"]]["design"] or "not_said") if u["id"] in profiles
+               else (anon[u["id"]], "", "") for u in users])
 
     counts = {}
     for a in answers:

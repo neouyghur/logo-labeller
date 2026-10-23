@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block body %}
+<header>
+  <span>{{ session.name }}</span>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+<div class="card welcome">
+  <h1 class="question">Two quick questions</h1>
+  <p class="muted">Both are optional. They help us understand whether background changes how people
+     judge logos. Your answers are stored under a code, never with your name or email.</p>
+  <form method="post">
+    <label for="age_range">Your age range</label>
+    <select id="age_range" name="age_range">
+      <option value="">Prefer not to say</option>
+      {% for value, text in ages.items() %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+    </select>
+    <label for="design">Your experience with design</label>
+    <select id="design" name="design">
+      <option value="">Prefer not to say</option>
+      {% for value, text in design.items() %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+    </select>
+    <button>Continue</button>
+  </form>
+</div>
+{% endblock %}
