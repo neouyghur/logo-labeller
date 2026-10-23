@@ -182,8 +182,11 @@ def status():
                    len(json.loads(r["state"]).get("confirmed", {})),
                    time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["updated_ms"] / 1000)))
                   for r in audit]
+    certs = db().execute(
+        """SELECT u.email, u.name, c.code, c.checks, c.correct, c.issued_at, c.redeemed_at
+           FROM certificates c JOIN users u ON u.id = c.user_id ORDER BY c.issued_at DESC""").fetchall()
     return render_template("status.html", o=overall(), size=size, annotators=annotators,
-                           audit=audit_rows)
+                           audit=audit_rows, certs=certs)
 
 
 @app.cli.command("audit-export")

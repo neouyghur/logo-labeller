@@ -9,12 +9,17 @@
   <p class="question">No pairs are loaded yet.</p>
   <p>Check back later.</p>
   {% elif state == "batch" %}
-  <p class="question">Batch {{ batch }} done — thank you!</p>
-  {% if more %}
-  <p>You can stop here. If you would like to help more, start another batch of {{ size }}.</p>
-  <form method="post" action="{{ url_for('more') }}"><button>Help more: another {{ size }}</button></form>
+  <p class="question">{% if batch > 1 %}Batch {{ batch }} done{% else %}All done{% endif %} — thank you!</p>
+  {% if cert.code %}
+  <p>Your certificate is ready. Download or print it to claim your reward.</p>
+  <p><a href="{{ url_for('certificate_page') }}">Open your certificate</a> · code <strong>{{ cert.code }}</strong></p>
   {% else %}
-  <p>There is nothing left for you to label.</p>
+  <p>Thank you for taking part. Some of your answers did not pass our quality checks, so we cannot
+     issue a certificate for this session.</p>
+  {% endif %}
+  {% if more %}
+  <p>If you would like to help more, start another batch of {{ size }}.</p>
+  <form method="post" action="{{ url_for('more') }}"><button>Help more: another {{ size }}</button></form>
   {% endif %}
   {% else %}
   <p class="question">Nothing left for you — thank you.</p>

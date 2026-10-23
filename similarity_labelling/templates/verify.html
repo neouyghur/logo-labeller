@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="card">
+  <h1 class="question">Check a certificate</h1>
+  <form method="get" action="{{ url_for('verify') }}">
+    <label for="code">Certificate code</label>
+    <input id="code" name="code" value="{{ code or typed }}" placeholder="LS-XXXX-XXXX" autocomplete="off">
+    <button>Check</button>
+  </form>
+  {% if typed %}
+  {% if c and c.code %}
+  <p style="color: var(--yes)"><strong>Valid.</strong> Issued to {{ c.name or "a participant" }} on {{ c.issued_at[:10] }}.</p>
+  {% if c.redeemed_at %}
+  <p style="color: var(--unsure)"><strong>Reward already given</strong> on {{ c.redeemed_at[:10] }}.</p>
+  {% elif staff %}
+  <form method="post"><button>Mark reward given</button></form>
+  {% else %}
+  <p class="muted">Reward not yet claimed.</p>
+  {% endif %}
+  {% else %}
+  <p class="flash"><strong>Not valid.</strong> No certificate has this code.</p>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -30,6 +30,23 @@
   {% endfor %}
 </table>
 
+<h2>Certificates</h2>
+<p class="muted">{{ certs | selectattr("code") | list | length }} issued ·
+   {{ certs | selectattr("redeemed_at") | list | length }} rewards given ·
+   check a code at <a href="{{ url_for('verify') }}">/verify</a></p>
+<table>
+  <tr><th>email</th><th>name</th><th>code</th><th>checks right</th><th>decided (UTC)</th><th>reward given (UTC)</th></tr>
+  {% for c in certs %}
+  <tr{% if not c.code %} class="muted"{% endif %}>
+    <td>{{ c.email }}</td><td>{{ c.name }}</td>
+    <td>{% if c.code %}<a href="{{ url_for('verify', code=c.code) }}">{{ c.code }}</a>{% else %}not issued{% endif %}</td>
+    <td>{{ c.correct }} / {{ c.checks }}</td><td>{{ c.issued_at }}</td><td>{{ c.redeemed_at or "" }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">No finished batches yet.</td></tr>
+  {% endfor %}
+</table>
+
 <h2>Gallery audit</h2>
 <table>
   <tr><th>labeller</th><th>email</th><th>sheet</th><th>marked items</th><th>pages done</th><th>last save (UTC)</th></tr>

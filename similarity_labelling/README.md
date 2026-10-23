@@ -4,11 +4,15 @@ Website where annotators judge whether two logos are similar: **yes / no / unsur
 Flask + SQLite behind nginx on the Nectar VM `logo-label` (203.101.229.244),
 served at https://203-101-229-244.sslip.io.
 
-Every pair needs `LABELWEB_TARGET` answers (default 3) from different annotators. Work comes
-in **batches** of one page per query (270; `LABELWEB_BATCH` overrides): within a batch each
-query appears once, attention checks included, then fewest answers first, then a fixed random
-order. After a batch the annotator may stop or press "Help more" for another. Annotators see
-only their own batch progress; overall numbers are on `/status` (audit passcode) and
+Every pair needs `LABELWEB_TARGET` answers (default 3) from different annotators. Each annotator
+does **one batch of 30** (`LABELWEB_BATCH`; `LABELWEB_MAX_BATCHES=0` re-enables "Help more"):
+21 real pairs and 9 attention checks (`LABELWEB_CHECKS`) at positions fixed per annotator, each
+query at most once. Real pairs go fewest answers first, then a fixed random order; checks are a
+shared pool (a query with another group's logo, answer "no") drawn in a per-annotator order.
+At the end, an annotator with at least 80% of checks right (`LABELWEB_CERT_MIN`) gets a printable
+**certificate** with a code `LS-XXXX-XXXX` and a QR code. Anyone can check a code at `/verify`;
+passcode holders also see "Mark reward given" there, and every certificate is listed on `/status`.
+Annotators see only their own batch progress; overall numbers are on `/status` (audit passcode) and
 `sudo labelweb-admin progress`. Keyboard: `Y`/`N`/`U` or `1`/`2`/`3`, `B` goes back. Images are only
 served to logged-in users (nginx `internal` location + `X-Accel-Redirect`).
 

@@ -5,6 +5,12 @@ answers (default 3) from different annotators: each annotator is served a pair t
 answered, fewest answers first, then in a fixed random order (pairs.shuffle). Once every pair
 has reached the target, annotators see the done page; any number of annotators can join.
 Answers can be changed by going back.
+
+Each annotator does one batch (LABELWEB_BATCH pages, default 30; LABELWEB_MAX_BATCHES, default
+1, allows more). LABELWEB_CHECKS of its pages (default 9) are attention checks at positions
+fixed per annotator. At the end of the first batch the annotator gets a printable certificate
+with a code (LS-XXXX-XXXX) if at least LABELWEB_CERT_MIN (0.8) of their checks were answered
+"no"; anyone can check a code at /verify, and passcode holders can mark its reward given.
 Sign-in is Firebase Authentication (Google). With LABELWEB_OPEN_SIGNUP=1 any verified Google
 account gets a session on first sign-in; otherwise only emails added with allow-email do.
 Behind nginx, images are handed off with X-Accel-Redirect so they stay behind the login.
@@ -19,22 +25,28 @@ Admin commands (run with `flask --app app <command>`, or `sudo labelweb-admin <c
   export OUT_DIR        answers.tsv, annotators.tsv, pairs_summary.tsv, annotator_emails.tsv
 
 Attention checks are pairs with is_check = 1: a query shown with another query's positive, so
-the right answer is "no". They are served like any pair but count towards no progress figure.
+the right answer is "no". They take the batch's check positions, are drawn in a per-annotator
+random order with no answer limit (the pool is reused by everyone), and count towards no
+progress figure.
 """
 import csv
 import mimetypes
 import os
+import random
+import re
 import secrets
 import sqlite3
 import sys
 from functools import wraps
 
 import click
+import segno
 import google.auth.exceptions
 from flask import (Flask, abort, g, redirect, render_template, request,
                    send_from_directory, session, url_for)
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
 LABELS = ("yes", "no", "unsure")
@@ -52,7 +64,8 @@ CREATE TABLE IF NOT EXISTS users (
     id      INTEGER PRIMARY KEY,
     email   TEXT UNIQUE NOT NULL,
     active  INTEGER NOT NULL DEFAULT 1,
-    batches INTEGER NOT NULL DEFAULT 1
+    batches INTEGER NOT NULL DEFAULT 1,
+    name    TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS labels (
     user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -60,6 +73,15 @@ CREATE TABLE IF NOT EXISTS labels (
     label      TEXT NOT NULL CHECK (label IN ('yes', 'no', 'unsure')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, pair_id)
+);
+-- decided once, at the end of an annotator's first batch
+CREATE TABLE IF NOT EXISTS certificates (
+    user_id     INTEGER PRIMARY KEY REFERENCES users(id),
+    code        TEXT UNIQUE,  -- NULL: too few attention checks answered "no"
+    checks      INTEGER NOT NULL,
+    correct     INTEGER NOT NULL,
+    issued_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    redeemed_at TEXT
 );
 -- the gallery audit sheets (audit.py)
 CREATE TABLE IF NOT EXISTS audit_access (
@@ -83,14 +105,21 @@ if use_x_accel and not secret:
     sys.exit("LABELWEB_SECRET must be set in production")
 
 app = Flask(__name__)
+if use_x_accel:
+    # behind nginx: build https:// links (the certificate's QR code) from X-Forwarded-Proto
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
 app.config.update(
     SECRET_KEY=secret or secrets.token_hex(32),
     DB_PATH=os.environ.get("LABELWEB_DB", "labels.sqlite3"),
     IMAGE_ROOT=os.environ.get("LABELWEB_IMAGES", "images"),
     USE_X_ACCEL=use_x_accel,
     TARGET=int(os.environ.get("LABELWEB_TARGET", "3")),
-    # pages per batch; 0 = one per query
-    BATCH=int(os.environ.get("LABELWEB_BATCH", "0")),
+    # pages per batch (0 = one per query), attention checks among them, batches per annotator (0 = no limit)
+    BATCH=int(os.environ.get("LABELWEB_BATCH", "30")),
+    CHECKS=int(os.environ.get("LABELWEB_CHECKS", "9")),
+    MAX_BATCHES=int(os.environ.get("LABELWEB_MAX_BATCHES", "1")),
+    # share of attention checks answered "no" that earns a certificate
+    CERT_MIN=float(os.environ.get("LABELWEB_CERT_MIN", "0.8")),
     # 1: any verified Google account may sign in; 0: only emails added with allow-email
     OPEN_SIGNUP=os.environ.get("LABELWEB_OPEN_SIGNUP", "0") == "1",
     # gallery audit sheets: one directory per sheet; empty passcode closes the audit
@@ -161,28 +190,83 @@ def progress():
             "in_batch": done - (batch - 1) * size}
 
 
+def check_slots(uid, batch, size):
+    """Positions within a batch that hold attention checks: fixed per annotator and batch."""
+    return set(random.Random(f"{uid}:{batch}").sample(range(size), min(app.config["CHECKS"], size)))
+
+
 def next_pair(skip_id=None):
     """The pair this annotator should see next, or None when there is nothing left for them.
 
-    A batch shows each query (img_a) once: pairs whose query this annotator has not yet seen
-    in the current batch come first; only when none is left does a query repeat. Then the
-    fewest answers so far, then the fixed random order. Attention checks are ordinary
-    candidates, so they fall inside the batch and use up their query's slot.
+    The batch position decides between an attention check and a real pair. A batch shows each
+    query (img_a) once where it can: pairs whose query this annotator has not yet seen in the
+    current batch come first. Real pairs then go fewest answers first, in the fixed random
+    order shared by everyone, so pairs fill up to the target one after another; checks have no
+    answer limit and go in a random order of the annotator's own. With skip_id (the pair on
+    screen, for prefetching) the position is the one after it.
     """
     uid = session["user_id"]
     size = batch_size()
     done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?", (uid,)).fetchone()[0]
+    if skip_id is not None:
+        done += 1
     start = (done // size) * size if size else 0
-    return db().execute(
+    want_check = int(bool(size) and done - start in check_slots(uid, done // size + 1, size))
+    salt = random.Random(uid).getrandbits(31)
+    row = db().execute(
         """WITH used AS (SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
                          WHERE l.user_id = :uid ORDER BY l.rowid LIMIT -1 OFFSET :start)
            SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
            WHERE p.id IS NOT :skip
            GROUP BY p.id
-           HAVING COUNT(l.user_id) < :target AND COALESCE(SUM(l.user_id = :uid), 0) = 0
-           ORDER BY p.img_a IN (SELECT img_a FROM used), COUNT(l.user_id), p.shuffle
+           HAVING COALESCE(SUM(l.user_id = :uid), 0) = 0 AND (p.is_check OR COUNT(l.user_id) < :target)
+           ORDER BY p.is_check != :want, p.img_a IN (SELECT img_a FROM used),
+                    CASE WHEN p.is_check THEN 0 ELSE COUNT(l.user_id) END,
+                    CASE WHEN p.is_check THEN (p.shuffle | :salt) - (p.shuffle & :salt) ELSE p.shuffle END
            LIMIT 1""",
-        {"uid": uid, "start": start, "skip": skip_id, "target": app.config["TARGET"]}).fetchone()
+        {"uid": uid, "start": start, "skip": skip_id, "target": app.config["TARGET"],
+         "want": want_check, "salt": salt}).fetchone()
+    # only checks left: every real pair has its answers, so there is nothing to label
+    if row is not None and row["is_check"] and not want_check:
+        return None
+    return row
+
+
+CODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"  # no 0/O, 1/I/L
+
+
+def normalise_code(text):
+    """LS-XXXX-XXXX from whatever was typed or scanned, or None."""
+    chars = re.sub(r"[^0-9A-Z]", "", text.upper())
+    chars = chars[2:] if chars.startswith("LS") else chars
+    if len(chars) != 8 or any(c not in CODE_CHARS for c in chars):
+        return None
+    return f"LS-{chars[:4]}-{chars[4:]}"
+
+
+def certificate(uid):
+    """This annotator's certificate row, deciding it the first time their first batch is complete."""
+    row = db().execute("SELECT * FROM certificates WHERE user_id = ?", (uid,)).fetchone()
+    if row is not None:
+        return row
+    c = db().execute(
+        """SELECT COUNT(*) AS checks, COALESCE(SUM(l.label = 'no'), 0) AS correct
+           FROM labels l JOIN pairs p ON p.id = l.pair_id WHERE l.user_id = ? AND p.is_check = 1""",
+        (uid,)).fetchone()
+    passed = c["checks"] == 0 or c["correct"] / c["checks"] >= app.config["CERT_MIN"]
+    code = None
+    if passed:
+        code = "LS-" + "".join(secrets.choice(CODE_CHARS) for _ in range(8))
+        code = code[:7] + "-" + code[7:]
+    # OR IGNORE: two tabs finishing at once keep the first decision
+    db().execute("INSERT OR IGNORE INTO certificates (user_id, code, checks, correct) VALUES (?, ?, ?, ?)",
+                 (uid, code, c["checks"], c["correct"]))
+    db().commit()
+    return db().execute("SELECT * FROM certificates WHERE user_id = ?", (uid,)).fetchone()
+
+
+def can_do_more(prog):
+    return not app.config["MAX_BATCHES"] or prog["allowed"] < app.config["MAX_BATCHES"]
 
 
 def overall():
@@ -223,6 +307,7 @@ def session_login():
         return {"error": "Sign-in could not be verified. Try again."}, 401
 
     email = claims.get("email", "").lower()
+    name = (claims.get("name") or "").strip()
     if app.config["OPEN_SIGNUP"]:
         # an existing row is left alone, so remove-email (active = 0) still blocks that person
         db().execute("INSERT OR IGNORE INTO users (email) VALUES (?)", (email,))
@@ -230,6 +315,10 @@ def session_login():
     row = db().execute("SELECT id FROM users WHERE email = ? AND active = 1", (email,)).fetchone()
     if row is None:
         return {"error": f"{email} is not on the annotator list. Ask the project owner to add it."}, 403
+    if name:
+        # the Google display name, printed on the certificate
+        db().execute("UPDATE users SET name = ? WHERE id = ?", (name, row["id"]))
+        db().commit()
     session.clear()
     session["user_id"] = row["id"]
     session["name"] = email
@@ -249,8 +338,9 @@ def index():
     prog = progress()
     total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
     if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
-        # batch finished: stop here, or opt in to another one
-        return render_template("done.html", state="batch", more=next_pair() is not None, **prog)
+        # batch finished: the certificate, and another batch if allowed
+        return render_template("done.html", state="batch", cert=certificate(session["user_id"]),
+                               more=can_do_more(prog) and next_pair() is not None, **prog)
     row = next_pair()
     if row is None:
         return render_template("done.html", state="empty" if total == 0 else "nothing", **prog)
@@ -261,7 +351,7 @@ def index():
 @login_required
 def more():
     prog = progress()
-    if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
+    if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"] and can_do_more(prog):
         db().execute("UPDATE users SET batches = batches + 1 WHERE id = ?", (session["user_id"],))
         db().commit()
     return redirect(url_for("index"))
@@ -308,6 +398,40 @@ def label(pair_id):
     return redirect(url_for("index"))
 
 
+@app.route("/certificate")
+@login_required
+def certificate_page():
+    row = db().execute("SELECT c.code, c.issued_at, u.name, u.email FROM certificates c "
+                       "JOIN users u ON u.id = c.user_id WHERE c.user_id = ?",
+                       (session["user_id"],)).fetchone()
+    if row is None or row["code"] is None:
+        return redirect(url_for("index"))
+    url = url_for("verify", code=row["code"], _external=True)
+    qr = segno.make(url, error="m").svg_inline(scale=4, border=0)
+    return render_template("certificate.html", c=row, url=url, qr=qr, size=batch_size())
+
+
+@app.route("/verify", methods=["GET", "POST"])
+@app.route("/verify/<code>", methods=["GET", "POST"])
+def verify(code=None):
+    """Public check of a certificate code; passcode holders can also mark its reward given."""
+    typed = code or request.values.get("code", "")
+    norm = normalise_code(typed) if typed else None
+    if norm and norm != code:
+        return redirect(url_for("verify", code=norm))
+    row = db().execute("SELECT c.*, u.name FROM certificates c JOIN users u ON u.id = c.user_id "
+                       "WHERE c.code = ?", (norm,)).fetchone() if norm else None
+    uid = session.get("user_id")
+    staff = uid is not None and db().execute(
+        "SELECT 1 FROM audit_access WHERE user_id = ?", (uid,)).fetchone() is not None
+    if request.method == "POST" and row is not None and staff:
+        db().execute("UPDATE certificates SET redeemed_at = datetime('now') WHERE code = ? "
+                     "AND redeemed_at IS NULL", (norm,))
+        db().commit()
+        return redirect(url_for("verify", code=norm))
+    return render_template("verify.html", typed=typed, code=norm, c=row, staff=staff)
+
+
 @app.route("/img/<path:relpath>")
 @login_required
 def image(relpath):
@@ -333,8 +457,12 @@ def init_db():
     if "is_check" not in columns:
         db().execute("ALTER TABLE pairs ADD COLUMN is_check INTEGER NOT NULL DEFAULT 0")
         db().commit()
-    if "batches" not in [r["name"] for r in db().execute("PRAGMA table_info(users)")]:
+    user_columns = [r["name"] for r in db().execute("PRAGMA table_info(users)")]
+    if "batches" not in user_columns:
         db().execute("ALTER TABLE users ADD COLUMN batches INTEGER NOT NULL DEFAULT 1")
+        db().commit()
+    if "name" not in user_columns:
+        db().execute("ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
         db().commit()
     db().execute("PRAGMA journal_mode = WAL")
     click.echo(f"initialised {app.config['DB_PATH']}")

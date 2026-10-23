@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  /* the certificate is always printed black on white, whatever the screen theme */
+  .cert { background: #fff; color: #1d1d1b; border: 6px double #2457c5; border-radius: 4px;
+          padding: 40px 32px; margin: 16px 0; text-align: center; }
+  .cert h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: .02em; }
+  .cert .sub { color: #6b6b66; margin: 0 0 28px; }
+  .cert .name { font-size: 26px; font-weight: 600; margin: 8px 0 20px; }
+  .cert .code { font: 600 22px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .08em; margin: 24px 0 8px; }
+  .cert .foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+                margin-top: 28px; text-align: left; font-size: 13px; color: #6b6b66; }
+  .cert .qr svg { width: 112px; height: 112px; display: block; }
+  .actions { display: flex; gap: 10px; justify-content: center; }
+  .actions button { padding: 10px 18px; border-radius: 6px; border: 0; background: var(--focus);
+                    color: #fff; cursor: pointer; }
+  @media print {
+    @page { size: A4 landscape; margin: 15mm; }
+    body { background: #fff; }
+    main { max-width: none; padding: 0; }
+    .noprint { display: none; }
+    .cert { margin: 0; }
+  }
+</style>
+<header class="noprint">
+  <a href="{{ url_for('index') }}">← Back</a>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+<div class="cert">
+  <h1>Certificate of Participation</h1>
+  <p class="sub">Logo Similarity Study · Queensland University of Technology</p>
+  <p>This certifies that</p>
+  <p class="name">{{ c.name or c.email }}</p>
+  <p>completed {{ size }} logo-pair judgements for the study on {{ c.issued_at[:10] }}.</p>
+  <p class="code">{{ c.code }}</p>
+  <div class="foot">
+    <div>Check this certificate at<br><strong>{{ url_for('verify', _external=True) }}</strong><br>
+         or scan the code on the right.</div>
+    <div class="qr">{{ qr | safe }}</div>
+  </div>
+</div>
+<div class="actions noprint">
+  <button onclick="window.print()">Download / print</button>
+</div>
+<p class="muted noprint" style="text-align:center">Choose “Save as PDF” in the print window to download it.</p>
+{% endblock %}
