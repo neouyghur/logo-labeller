@@ -18,7 +18,7 @@ Behind nginx, images are handed off with X-Accel-Redirect so they stay behind th
 Admin commands (run with `flask --app app <command>`, or `sudo labelweb-admin <command>` on the VM):
   init-db               create the tables
   load-pairs CSV        add pairs from a CSV with header pair_key,img_a,img_b (rerun-safe)
-  allow-email EMAIL...  let these Google accounts sign in
+  allow-email EMAIL...  let these accounts sign in
   remove-email EMAIL... revoke access at the next request; their answers are kept
   list-users            emails, access, answer counts
   progress              how many pairs have reached the target number of answers
@@ -137,7 +137,7 @@ app.config.update(
     MAX_BATCHES=int(os.environ.get("LABELWEB_MAX_BATCHES", "1")),
     # share of attention checks answered "no" that earns a certificate
     CERT_MIN=float(os.environ.get("LABELWEB_CERT_MIN", "0.8")),
-    # 1: any verified Google account may sign in; 0: only emails added with allow-email
+    # 1: any verified Google or email-and-password account may sign in; 0: only emails added with allow-email
     OPEN_SIGNUP=os.environ.get("LABELWEB_OPEN_SIGNUP", "0") == "1",
     # gallery audit sheets: one directory per sheet; empty passcode closes the audit
     AUDIT_ROOT=os.environ.get("LABELWEB_AUDIT", "audit"),

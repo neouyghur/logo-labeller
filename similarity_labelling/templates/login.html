@@ -12,7 +12,7 @@
   <p>This research is conducted by Osman Tursun, Yusuf Efe Ozudogru, Efe Buke, Clinton Fookes and Sinan Kalkan.</p>
   <p><strong>Your data.</strong> Your annotations will become part of a ground-truth dataset used
      to evaluate and compare image retrieval methods. We do not collect any personally identifying
-     information beyond your Google email address and name, used only to sign you in and to issue
+     information beyond your email address and name, used only to sign you in and to issue
      your certificate, and two optional questions: your age range and design experience. Your
      answers are stored under a code, never published with your name or email, and used
      exclusively for academic research. You must be 18 or older to take part.</p>
@@ -20,40 +20,146 @@
   <p id="msg" class="flash" {% if configured %}hidden{% endif %}>
     {% if not configured %}Sign-in is not configured yet.{% endif %}
   </p>
+  <p id="note" class="note" hidden></p>
   <button id="google" {% if not configured %}disabled{% endif %}>Sign in with Google</button>
+
+  <div class="or"><span>or use your email</span></div>
+  <div class="tabs" role="tablist">
+    <button type="button" id="tab-in" class="on" role="tab">Sign in</button>
+    <button type="button" id="tab-up" role="tab">Create account</button>
+  </div>
+  <form id="email-form" autocomplete="on">
+    <div id="name-row" hidden>
+      <label for="name">Your name <span class="muted">(printed on your certificate)</span></label>
+      <input id="name" name="name" autocomplete="name" maxlength="80">
+    </div>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required>
+    <button id="email-go" {% if not configured %}disabled{% endif %}>Sign in</button>
+  </form>
+  <p class="small">
+    <button type="button" class="link" id="forgot">Forgot password?</button>
+    <button type="button" class="link" id="resend" hidden>Resend the confirmation email</button>
+  </p>
 </div>
+<style>
+  .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; margin: 22px 0 6px; }
+  .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 8px; }
+  .card .tabs button { margin-top: 0; border-radius: 0; background: none; color: var(--muted);
+                       border-bottom: 2px solid var(--line); }
+  .card .tabs button.on { color: var(--focus); border-bottom-color: var(--focus); font-weight: 600; }
+  .note { color: var(--yes); }
+  .small { font-size: 14px; display: flex; justify-content: space-between; margin: 10px 0 0; }
+  .card .small .link { width: auto; margin: 0; padding: 0; background: none; color: var(--focus); }
+</style>
 
 {% if configured %}
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut }
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword,
+           signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile }
     from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
   const auth = getAuth(initializeApp({{ firebase | tojson }}));
-  const msg = document.getElementById("msg");
-  const button = document.getElementById("google");
-  const show = (text) => { msg.textContent = text; msg.hidden = false; };
+  const $ = (id) => document.getElementById(id);
+  const msg = $("msg"), note = $("note");
+  const show = (text) => { note.hidden = true; msg.textContent = text; msg.hidden = false; };
+  const tell = (text) => { msg.hidden = true; note.textContent = text; note.hidden = false; };
+  let creating = false;
 
-  button.addEventListener("click", async () => {
-    button.disabled = true;
+  const ERRORS = {
+    "auth/popup-blocked": "Your browser blocked the sign-in window. Allow pop-ups for this site and try again.",
+    "auth/invalid-credential": "Wrong email or password.",
+    "auth/wrong-password": "Wrong email or password.",
+    "auth/user-not-found": "Wrong email or password.",
+    "auth/email-already-in-use": "This email already has an account. Sign in instead.",
+    "auth/invalid-email": "That email address doesn't look right.",
+    "auth/weak-password": "Choose a password of at least 8 characters.",
+    "auth/too-many-requests": "Too many attempts. Wait a few minutes and try again.",
+  };
+  const why = (e) => ERRORS[e.code] || "Sign-in failed (" + (e.code || e.message) + ").";
+
+  // hand the Firebase ID token to the server; the Flask session is the login from here on
+  async function finish(user) {
+    const idToken = await user.getIdToken(true);
+    await signOut(auth);
+    const r = await fetch("{{ url_for('session_login') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    if (r.ok) { location.href = {{ next | tojson }}; return; }
+    show((await r.json()).error);
+  }
+
+  $("google").addEventListener("click", async () => {
+    $("google").disabled = true;
+    try { await finish((await signInWithPopup(auth, new GoogleAuthProvider())).user); }
+    catch (e) { show(why(e)); }
+    $("google").disabled = false;
+  });
+
+  function mode(up) {
+    creating = up;
+    $("tab-in").classList.toggle("on", !up);
+    $("tab-up").classList.toggle("on", up);
+    $("name-row").hidden = !up;
+    $("email-go").textContent = up ? "Create account" : "Sign in";
+    $("password").autocomplete = up ? "new-password" : "current-password";
+    $("forgot").hidden = up;
+  }
+  $("tab-in").addEventListener("click", () => mode(false));
+  $("tab-up").addEventListener("click", () => mode(true));
+
+  $("email-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const email = $("email").value.trim(), password = $("password").value;
+    $("email-go").disabled = true;
     try {
-      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-      const idToken = await cred.user.getIdToken();
-      // the Flask session is the login from here on; Firebase only vouches for the email once
+      if (creating) {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const name = $("name").value.trim();
+        if (name) await updateProfile(cred.user, { displayName: name });
+        await sendEmailVerification(cred.user);
+        await signOut(auth);
+        mode(false);
+        tell(`We sent a confirmation link to ${email}. Click it (check your spam folder), then sign in here.`);
+        $("resend").hidden = false;
+      } else {
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        if (!cred.user.emailVerified) {
+          await signOut(auth);
+          show(`Please confirm your email first: click the link we sent to ${email}, then sign in again.`);
+          $("resend").hidden = false;
+        } else {
+          await finish(cred.user);
+        }
+      }
+    } catch (e) { show(why(e)); }
+    $("email-go").disabled = false;
+  });
+
+  $("resend").addEventListener("click", async () => {
+    // resending needs the account signed in; ask for the password again if it is not at hand
+    const email = $("email").value.trim(), password = $("password").value;
+    try {
+      const user = (await signInWithEmailAndPassword(auth, email, password)).user;
+      await sendEmailVerification(user);
       await signOut(auth);
-      const r = await fetch("{{ url_for('session_login') }}", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-      if (r.ok) { location.href = {{ next | tojson }}; return; }
-      show((await r.json()).error);
-    } catch (e) {
-      show(e.code === "auth/popup-blocked"
-        ? "Your browser blocked the sign-in window. Allow pop-ups for this site and try again."
-        : "Sign-in failed (" + (e.code || e.message) + ").");
-    }
-    button.disabled = false;
+      tell(`Sent again to ${email}. Check your spam folder too.`);
+    } catch (e) { show(why(e)); }
+  });
+
+  $("forgot").addEventListener("click", async () => {
+    const email = $("email").value.trim();
+    if (!email) { show("Type your email above, then press “Forgot password?” again."); return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      tell(`If ${email} has an account, a password-reset link is on its way.`);
+    } catch (e) { show(why(e)); }
   });
 </script>
 {% endif %}
