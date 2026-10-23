@@ -96,7 +96,7 @@ Any address that is a Google account works, including a QUT address registered a
 ## Welcome page and guide
 
 The sign-in page carries the study welcome (purpose, researchers, data statement, contact:
-`LABELWEB_CONTACT_NAME` / `LABELWEB_CONTACT_EMAIL`). The guide is a deck of slides
+`LABELWEB_CONTACTS`, `Name <email>; Name <email>`). The guide is a deck of slides
 (`templates/_intro.html`) that opens over the first pair; it is mandatory: answers are refused
 until its last slide (a two-pair practice) has been answered and "Start labelling" pressed
 (`users.guided`). Its example logos are invented SVG marks drawn in the template. The pair page

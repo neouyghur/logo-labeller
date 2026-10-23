@@ -4,6 +4,8 @@
   /* the certificate is always printed black on white, whatever the screen theme */
   .cert { background: #fff; color: #1d1d1b; border: 6px double #2457c5; border-radius: 4px;
           padding: 40px 32px; margin: 16px 0; text-align: center; }
+  .cert .brandrow { display: flex; justify-content: center; align-items: center; gap: 28px; margin-bottom: 22px; }
+  .cert .brandrow img { height: 44px; width: auto; }
   .cert h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: .02em; }
   .cert .sub { color: #6b6b66; margin: 0 0 28px; }
   .cert .name { font-size: 26px; font-weight: 600; margin: 8px 0 20px; }
@@ -27,8 +29,12 @@
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
 </header>
 <div class="cert">
+  <div class="brandrow">
+    <img src="{{ url_for('static', filename='brand/qut.svg') }}" alt="Queensland University of Technology">
+    <img src="{{ url_for('static', filename='brand/metu.svg') }}" alt="Middle East Technical University">
+  </div>
   <h1>Certificate of Participation</h1>
-  <p class="sub">Logo Similarity Study · Queensland University of Technology</p>
+  <p class="sub">Logo Similarity User Study · Queensland University of Technology and Middle East Technical University</p>
   <p>This certifies that</p>
   <p class="name">{{ c.name or c.email }}</p>
   <p>completed {{ size }} logo-pair judgements for the study on {{ c.issued_at[:10] }}.</p>

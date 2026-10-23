@@ -53,6 +53,15 @@
   h2 { font-size: 17px; margin-top: 24px; }
   main.wide { max-width: 1120px; }
   .welcome { max-width: 560px; }
+  .site-foot { max-width: 760px; margin: 40px auto 0; padding: 18px 16px 28px; border-top: 1px solid var(--line);
+               color: var(--muted); font-size: 13px; text-align: center; }
+  .site-foot .brands { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px;
+                       margin-bottom: 12px; }
+  /* the university marks keep a white ground in dark mode */
+  .site-foot .brands a { background: #fff; border-radius: 8px; padding: 8px 12px; display: flex; }
+  .site-foot .brands img { height: 40px; width: auto; display: block; }
+  .site-foot p { margin: 6px 0; }
+  @media print { .site-foot { display: none; } }
   .primary { display: inline-block; padding: 10px 18px; border-radius: 6px; border: 0;
              background: var(--focus); color: #fff; cursor: pointer; text-decoration: none; }
 </style>
@@ -61,5 +70,17 @@
 <main class="{% block main_class %}{% endblock %}">
 {% block body %}{% endblock %}
 </main>
+<footer class="site-foot">
+  <div class="brands">
+    <a href="https://www.qut.edu.au" target="_blank" rel="noopener"><img src="{{ url_for('static', filename='brand/qut.svg') }}" alt="Queensland University of Technology"></a>
+    <a href="https://www.metu.edu.tr" target="_blank" rel="noopener"><img src="{{ url_for('static', filename='brand/metu.svg') }}" alt="Middle East Technical University"></a>
+  </div>
+  <p>Logo Similarity User Study · a research collaboration of Queensland University of Technology
+     and Middle East Technical University.</p>
+  <p>Contact: {% for name, email in contacts %}{{ name }} (<a href="mailto:{{ email }}">{{ email }}</a>){% if not loop.last %} · {% endif %}{% endfor %}</p>
+  <p>© {{ year }} Queensland University of Technology and Middle East Technical University. All rights reserved.
+     Logos shown in this study are trademarks of their respective owners, displayed solely for
+     non-commercial academic research.</p>
+</footer>
 </body>
 </html>

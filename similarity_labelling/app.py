@@ -37,6 +37,7 @@ import re
 import secrets
 import sqlite3
 import sys
+import time
 from functools import wraps
 
 import click
@@ -126,9 +127,10 @@ app.config.update(
     # gallery audit sheets: one directory per sheet; empty passcode closes the audit
     AUDIT_ROOT=os.environ.get("LABELWEB_AUDIT", "audit"),
     AUDIT_PASSCODE=os.environ.get("LABELWEB_AUDIT_PASSCODE", ""),
-    # shown on the welcome page and in the guide slides
-    CONTACT_NAME=os.environ.get("LABELWEB_CONTACT_NAME", "Osman Tursun"),
-    CONTACT_EMAIL=os.environ.get("LABELWEB_CONTACT_EMAIL", "osman.tursun@qut.edu.au"),
+    # shown on the welcome page
+    # "Name <email>" entries separated by ";"
+    CONTACTS=os.environ.get("LABELWEB_CONTACTS",
+                            "Osman Tursun <osman.tursun@qut.edu.au>; Sinan Kalkan <s.kalkan@metu.edu.tr>"),
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=use_x_accel,
     # the Firebase web config; these values are public by design
@@ -354,8 +356,9 @@ def logout():
 
 
 @app.context_processor
-def study_contact():
-    return {"contact_name": app.config["CONTACT_NAME"], "contact_email": app.config["CONTACT_EMAIL"]}
+def study_contacts():
+    contacts = [re.fullmatch(r"\s*(.*?)\s*<\s*(\S+?)\s*>\s*", c) for c in app.config["CONTACTS"].split(";")]
+    return {"contacts": [m.groups() for m in contacts if m], "year": time.gmtime().tm_year}
 
 
 @app.route("/guide", methods=["POST"])
