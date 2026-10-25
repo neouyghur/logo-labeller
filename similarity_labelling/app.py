@@ -135,6 +135,8 @@ app.config.update(
     BATCH=int(os.environ.get("LABELWEB_BATCH", "30")),
     CHECKS=int(os.environ.get("LABELWEB_CHECKS", "9")),
     MAX_BATCHES=int(os.environ.get("LABELWEB_MAX_BATCHES", "1")),
+    # the guide counts as read only after this many seconds (its slides lock Next for about a minute)
+    GUIDE_MIN=int(os.environ.get("LABELWEB_GUIDE_MIN", "45")),
     # share of attention checks answered "no" that earns a certificate
     CERT_MIN=float(os.environ.get("LABELWEB_CERT_MIN", "0.8")),
     # 1: any verified Google or email-and-password account may sign in; 0: only emails added with allow-email
@@ -402,7 +404,14 @@ def profile():
 @app.route("/guide", methods=["POST"])
 @login_required
 def guide():
-    """The annotator finished the guide slides (shown over their first pair); from now on, pairs."""
+    """The annotator finished the guide slides (shown over their first pair); from now on, pairs.
+
+    Finishing faster than GUIDE_MIN seconds after the slides first opened is not accepted: the
+    slides come back, so their reading time cannot be skipped by posting here directly.
+    """
+    started = session.get("guide_started")
+    if started is None or time.time() - started < app.config["GUIDE_MIN"]:
+        return redirect(url_for("index"))
     db().execute("UPDATE users SET guided = datetime('now') WHERE id = ? AND guided IS NULL",
                  (session["user_id"],))
     db().commit()
@@ -462,8 +471,12 @@ def pair(pair_id):
     prev = db().execute(
         "SELECT pair_id FROM labels WHERE user_id = ? AND rowid < ? ORDER BY rowid DESC LIMIT 1",
         (session["user_id"], current["rowid"] if current else sys.maxsize)).fetchone()
+    intro = not guided()
+    if intro:
+        # when the guide slides were first shown, for the minimum reading time
+        session.setdefault("guide_started", time.time())
     return render_template("pair.html", pair=p, current=current["label"] if current else None,
-                           intro=not guided(),
+                           intro=intro,
                            prev_id=prev["pair_id"] if prev else None,
                            prefetch=next_pair(skip_id=pair_id), **progress())
 
