@@ -20,6 +20,27 @@
 <text x="80" y="72" text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
       font-weight="900" font-size="30" letter-spacing="3" fill="#fff">{{ word }}</text></svg>
 {% endmacro %}
+{% macro house_flat(color="#2457c5") %}
+<svg viewBox="0 0 120 120" aria-hidden="true"><path d="M60 18 104 56H90v44H30V56H16Z" fill="{{ color }}"/>
+<rect x="52" y="72" width="16" height="28" fill="#fff"/></svg>
+{% endmacro %}
+{% macro house_sketch(color="#8a5a2b") %}
+<svg viewBox="0 0 120 120" aria-hidden="true" fill="none" stroke="{{ color }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M22 58c12-12 24-25 39-38 13 12 26 24 38 37"/><path d="M31 52c-1 16 1 31 0 47 19 1 38-1 58 0 1-15-1-31 1-46"/>
+<path d="M53 99c0-8 1-16 0-23 5-1 10 0 14 0 1 8 0 16 1 23"/><path d="M38 64h10v10H38zM73 64h10v10H73z"/>
+<path d="M78 33v-12h8v19"/><path d="M84 14c3-3 6 0 9-3M86 8c3-2 5 1 8-1"/></svg>
+{% endmacro %}
+{% macro bank_columns() %}
+<svg viewBox="0 0 160 120" aria-hidden="true"><path d="M80 14 128 34H32Z" fill="#14365d"/>
+<g fill="#14365d"><rect x="38" y="40" width="9" height="34"/><rect x="58" y="40" width="9" height="34"/>
+<rect x="93" y="40" width="9" height="34"/><rect x="113" y="40" width="9" height="34"/><rect x="32" y="76" width="96" height="7"/></g>
+<text x="80" y="106" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="17" letter-spacing="2" fill="#14365d">HARBOR BANK</text></svg>
+{% endmacro %}
+{% macro bank_swirl() %}
+<svg viewBox="0 0 160 120" aria-hidden="true"><circle cx="40" cy="60" r="22" fill="#f2a900"/>
+<path d="M40 38a22 22 0 0 1 0 44a11 11 0 0 1 0-22a11 11 0 0 0 0-22Z" fill="#e4572e"/>
+<text x="70" y="70" font-family="'Trebuchet MS','Helvetica Neue',Arial,sans-serif" font-weight="700" font-size="28" fill="#333">crest</text></svg>
+{% endmacro %}
 {% macro duo(a, b, verdict=None, kind="", rough=false) %}
 <div class="duo">
   <figure>{{ a }}</figure>
@@ -151,12 +172,12 @@
           <h2>The one question</h2>
           <p class="lead">If you saw one of these logos briefly, <strong>could you mistake it for the other</strong>,
              or would it strongly remind you of the other?</p>
-          {{ duo(bird("#2457c5"), bird("#159c8c"), "Similar → Yes", "yes") }}
+          {{ duo(bird("#2457c5"), bird("#159c8c"), "Similar", "yes") }}
           <p>Logos can be similar without being identical. Here only the colour changed.</p>
         </section>
 
         <section class="slide" data-min="4">
-          <h2>Real look-alikes: <span class="tag yes">Yes</span></h2>
+          <h2>Real look-alikes: <span class="tag yes">Similar</span></h2>
           <p class="lead">Real logos from different companies that look strikingly alike.</p>
           <div class="real">
             <figure><img src="{{ url_for('static', filename='guide/pepsi_koreanair.jpg') }}" alt="Pepsi · Korean Air" loading="lazy">
@@ -172,7 +193,7 @@
         </section>
 
         <section class="slide" data-min="4">
-          <h2>More look-alikes: <span class="tag yes">Yes</span></h2>
+          <h2>More look-alikes: <span class="tag yes">Similar</span></h2>
           <p class="lead">Same structure and motif. You could mix them up at a glance.</p>
           <div class="real">
             <figure><img src="{{ url_for('static', filename='guide/chanel_gucci.jpg') }}" alt="Chanel · Gucci" loading="lazy">
@@ -189,7 +210,7 @@
 
         <section class="slide" data-min="4">
           <h2>In between: <span class="tag unsure">Unsure</span></h2>
-          <p class="lead">They share one or two features but differ clearly in others. Unsure is a fair answer.</p>
+          <p class="lead">They share one or two features but differ clearly in others.</p>
           <div class="real">
             <figure><img src="{{ url_for('static', filename='guide/amazon_workday.jpg') }}" alt="Amazon · Workday" loading="lazy">
               <figcaption><strong>Amazon · Workday</strong><br>An orange arc with a lowercase wordmark, but different words and lettering.</figcaption></figure>
@@ -204,7 +225,7 @@
         </section>
 
         <section class="slide" data-min="4">
-          <h2>Not similar: <span class="tag no">No</span></h2>
+          <h2>Different designs: <span class="tag no">Not similar</span></h2>
           <p class="lead">Sharing a letter or a colour is not enough when the designs differ.</p>
           <div class="real">
             <figure><img src="{{ url_for('static', filename='guide/tesla_titans.jpg') }}" alt="Tesla · Tennessee Titans" loading="lazy">
@@ -231,7 +252,7 @@
         <section class="slide" data-min="4">
           <h2>Colour is a trap</h2>
           <p class="lead">Both are red, but the shapes have nothing in common.</p>
-          {{ duo(star("#d23a2a"), script("Kivo", "#d23a2a"), "Not similar → No", "no") }}
+          {{ duo(star("#d23a2a"), script("Kivo", "#d23a2a"), "Not similar", "no") }}
           <p>Colour matters, but it should rarely decide your answer alone.</p>
         </section>
 
@@ -239,17 +260,27 @@
           <h2>Look past the photo</h2>
           <p class="lead">Blur, cropping, size or background come from how the image was collected,
              not from the design.</p>
-          {{ duo(bird("#2457c5"), bird("#2457c5"), "Same design → Yes", "yes", rough=true) }}
+          {{ duo(bird("#2457c5"), bird("#2457c5"), "Similar", "yes", rough=true) }}
           <p>Also ignore:</p>
           <ul class="ignore"><li>whether you know the brand</li><li>whether you like it</li><li>what the company sells</li></ul>
         </section>
 
         <section class="slide" data-min="4">
+          <h2>Tricky cases</h2>
+          <p class="lead">One letter apart, in the same design: easy to confuse.</p>
+          {{ duo(wordmark("NOVA", "#6b3fa0"), wordmark("NOVO", "#6b3fa0"), "Similar", "yes") }}
+          <p class="lead">The same idea, a house, drawn in very different styles: in between at most.</p>
+          {{ duo(house_flat(), house_sketch(), "Unsure", "unsure") }}
+          <p class="lead">Two banks, but completely different designs: the industry doesn't count.</p>
+          {{ duo(bank_columns(), bank_swirl(), "Not similar", "no") }}
+        </section>
+
+        <section class="slide" data-min="4">
           <h2>Words and lettering</h2>
           <p class="lead">Different words in the same layout and font can look very similar…</p>
-          {{ duo(wordmark("NOVA"), wordmark("LUMA"), "Similar → Yes", "yes") }}
+          {{ duo(wordmark("NOVA"), wordmark("LUMA"), "Similar", "yes") }}
           <p class="lead">…and the same name in a different style is still easy to mix up.</p>
-          {{ duo(wordmark("NOVA"), script("Nova", "#3a9a5b", leaf=true), "Similar → Yes", "yes") }}
+          {{ duo(wordmark("NOVA"), script("Nova", "#3a9a5b", leaf=true), "Similar", "yes") }}
         </section>
 
         <section class="slide" data-min="4">
