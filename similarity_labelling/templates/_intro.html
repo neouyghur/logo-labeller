@@ -15,10 +15,23 @@
 <text x="80" y="{{ 96 if leaf else 76 }}" text-anchor="middle" font-family="'Brush Script MT','Segoe Script',cursive"
       font-style="italic" font-size="44" fill="{{ color }}">{{ word }}</text></svg>
 {% endmacro %}
-{% macro wordmark(word, color="#1d1d1b") %}
+{% macro wordmark(word, color="#1d1d1b", size=30) %}
 <svg viewBox="0 0 160 120" aria-hidden="true"><rect x="12" y="34" width="136" height="52" rx="12" fill="{{ color }}"/>
-<text x="80" y="72" text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
-      font-weight="900" font-size="30" letter-spacing="3" fill="#fff">{{ word }}</text></svg>
+<text x="80" y="{{ 60 + size * 0.4 }}" text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
+      font-weight="900" font-size="{{ size }}" letter-spacing="{{ size / 10 }}" fill="#fff">{{ word }}</text></svg>
+{% endmacro %}
+{% macro plain(word) %}
+<svg viewBox="0 0 160 120" aria-hidden="true"><text x="80" y="72" text-anchor="middle"
+      font-family="Arial,'Helvetica Neue',sans-serif" font-weight="700" font-size="32" fill="#1d1d1b">{{ word }}</text></svg>
+{% endmacro %}
+{% macro apex_badge() %}
+<svg viewBox="0 0 160 120" aria-hidden="true"><path d="M80 10 128 36v48L80 110 32 84V36Z" fill="#c0392b"/>
+<path d="M56 78 80 38l24 40" fill="none" stroke="#fff" stroke-width="7" stroke-linejoin="round"/>
+<text x="80" y="98" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="15" letter-spacing="2" fill="#fff">APEX</text></svg>
+{% endmacro %}
+{% macro apex_thin() %}
+<svg viewBox="0 0 160 120" aria-hidden="true"><text x="80" y="72" text-anchor="middle"
+      font-family="'Helvetica Neue',Arial,sans-serif" font-weight="300" font-size="34" letter-spacing="6" fill="#2457c5">apex</text></svg>
 {% endmacro %}
 {% macro house_flat(color="#2457c5") %}
 <svg viewBox="0 0 120 120" aria-hidden="true"><path d="M60 18 104 56H90v44H30V56H16Z" fill="{{ color }}"/>
@@ -277,10 +290,12 @@
 
         <section class="slide" data-min="4">
           <h2>Words and lettering</h2>
-          <p class="lead">Different words in the same layout and font can look very similar…</p>
-          {{ duo(wordmark("NOVA"), wordmark("LUMA"), "Similar", "yes") }}
-          <p class="lead">…and the same name in a different style is still easy to mix up.</p>
-          {{ duo(wordmark("NOVA"), script("Nova", "#3a9a5b", leaf=true), "Similar", "yes") }}
+          <p class="lead">Different words in a common font: the font alone doesn't link them.</p>
+          {{ duo(plain("LUMA"), plain("NOVA"), "Not similar", "no") }}
+          <p class="lead">A distinctive name stays recognisable in any style.</p>
+          {{ duo(wordmark("XYVORA", "#6b3fa0", 22), script("Xyvora", "#3a9a5b", leaf=true), "Similar", "yes") }}
+          <p class="lead">A common word that many companies share, in different designs: in between.</p>
+          {{ duo(apex_badge(), apex_thin(), "Unsure", "unsure") }}
         </section>
 
         <section class="slide" data-min="4">
