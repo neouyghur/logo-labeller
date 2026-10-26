@@ -171,6 +171,17 @@ allocation ends, so copy backups off it regularly:
 rsync -av ubuntu@203.101.229.244:/srv/labelweb/data/backups/ /work/SAIVT/LOGO/labelling/backups/
 ```
 
+**Off-VM copy, nightly:** the same cron job also commits a text dump (`labels.sql`) to the
+private repo `neouyghur/logo-labeller-backups` and pushes it, using its own write-enabled
+deploy key (`/srv/labelweb/.ssh/backup_key`); the code repo's key stays read-only. One-off
+setup on the VM, run twice (the first run prints the key to add on GitHub):
+
+```bash
+sudo bash ~/logo-labeller/similarity_labelling/deploy/setup_backup_push.sh
+```
+
+Restore from it: `sqlite3 labels.sqlite3 < labels.sql`. The dump holds emails: keep that repo private.
+
 ## Files
 
 | File | Role |
@@ -182,3 +193,4 @@ rsync -av ubuntu@203.101.229.244:/srv/labelweb/data/backups/ /work/SAIVT/LOGO/la
 | `deploy/labelweb-admin` | runs an admin command as `labelweb` with the env loaded |
 | `publish_repo.sh`, `deploy/labelweb-sync` | Aqua → GitHub → VM transfer (see above) |
 | `deploy/nginx-labelweb.conf`, `deploy/labelweb.service`, `deploy/backup.sh` | installed by `setup_vm.sh` |
+| `deploy/setup_backup_push.sh` | one-off: nightly backup also pushed to a private GitHub repo |
