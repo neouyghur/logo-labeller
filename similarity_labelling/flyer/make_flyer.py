@@ -1,9 +1,10 @@
 """Print flyers for the labelling site: one A4 page per version (METU, QUT), as HTML.
 
-    python flyer/make_flyer.py OUTDIR [--url URL]
+    python flyer/make_flyer.py OUTDIR [--metu-url URL] [--qut-url URL]
 
 Writes OUTDIR/flyer_<version>.html; render each to PDF/PNG with headless Chrome
-(see render_flyers.sh). Only the reward box differs between versions.
+(see render_flyers.sh). Only the reward box and the link differ between versions:
+QUT gets the plain site address, not the dar.vin short link.
 """
 import argparse
 import pathlib
@@ -115,14 +116,17 @@ GIFT = ('<svg viewBox="0 0 64 64"><rect x="8" y="26" width="48" height="32" rx="
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("outdir", type=pathlib.Path)
-    ap.add_argument("--url", default="https://dar.vin/logo-similarity")
+    ap.add_argument("--metu-url", default="https://dar.vin/logo-similarity")
+    ap.add_argument("--qut-url", default="https://203-101-229-244.sslip.io")
     a = ap.parse_args()
     a.outdir.mkdir(parents=True, exist_ok=True)
-    qr = segno.make(a.url, error="m").svg_inline(omitsize=True, dark="#12305f", border=2)
+    urls = {"metu": a.metu_url, "qut": a.qut_url}
     for version, (title, text) in REWARDS.items():
+        url = urls[version]
+        qr = segno.make(url, error="m").svg_inline(omitsize=True, dark="#12305f", border=2)
         html = PAGE.format(
             bird_a=BIRD.format(c="#2457c5"), bird_b=BIRD.format(c="#1a9a9a"),
-            qr=qr, url=a.url, gift=GIFT, reward_title=title, reward_text=text,
+            qr=qr, url=url, gift=GIFT, reward_title=title, reward_text=text,
             qut=(BRAND / "qut.svg").as_uri(), metu=(BRAND / "metu.svg").as_uri())
         out = a.outdir / f"flyer_{version}.html"
         out.write_text(html)

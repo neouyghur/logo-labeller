@@ -17,6 +17,12 @@ Annotators see only their own batch progress; overall numbers are on `/status` (
 `sudo labelweb-admin progress`. Keyboard: `Y`/`U`/`N` or `1`/`2`/`3` (yes, unsure, no), `B` goes back. Images are only
 served to logged-in users (nginx `internal` location + `X-Accel-Redirect`).
 
+The VM is in Australia, about 0.3 s per round trip from Turkey, so an answer costs one request:
+the page script posts it with an `X-Answer-Fetch` header and the server replies with the next
+pair as JSON, which is swapped in without a reload (images preloaded, answers locked until both
+have loaded). Without the script the form posts and redirects straight to the next pair. nginx
+serves `/static/` itself (cached a day), over HTTP/2 with gzip.
+
 Sign-in is **Firebase Authentication with Google**. `LABELWEB_OPEN_SIGNUP=1` in
 `/etc/labelweb.env` (the default from `setup_vm.sh`) lets any verified Google account in and
 registers it on first sign-in; set it to `0` to admit only emails added with `allow-email`. The browser signs in with Firebase,

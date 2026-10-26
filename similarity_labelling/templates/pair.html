@@ -15,18 +15,18 @@
 <div class="layout">
 <div>
 <header>
-  <span>{{ session.name }} · {% if core %}{{ in_batch }} / {{ size }} pairs{% else %}batch {{ batch }} · {{ in_batch }} / {{ size }}{% endif %}</span>
+  <span>{{ session.name }} · <span id="progress">{% if core %}{{ in_batch }} / {{ size }} pairs{% else %}batch {{ batch }} · {{ in_batch }} / {{ size }}{% endif %}</span></span>
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
 </header>
-<div class="bar"><div style="width: {{ (100 * in_batch / size) if size else 0 }}%"></div></div>
+<div class="bar"><div id="bar" style="width: {{ (100 * in_batch / size) if size else 0 }}%"></div></div>
 
 <p class="question">Are these two logos similar?</p>
 <div class="pair">
-  <figure><img src="{{ url_for('image', relpath=pair.img_a) }}" alt="Logo A"></figure>
-  <figure><img src="{{ url_for('image', relpath=pair.img_b) }}" alt="Logo B"></figure>
+  <figure><img id="img-a" src="{{ url_for('image', relpath=pair.img_a) }}" alt="Logo A"></figure>
+  <figure><img id="img-b" src="{{ url_for('image', relpath=pair.img_b) }}" alt="Logo B"></figure>
 </div>
 
-<form method="post" class="answers" id="answers">
+<form method="post" action="{{ url_for('pair', pair_id=pair.id) }}" class="answers" id="answers">
   {% for value, key in [('yes', 'Y'), ('unsure', 'U'), ('no', 'N')] %}
   <button name="label" value="{{ value }}" class="{{ value }}{% if current == value %} chosen{% endif %}">
     {{ value | capitalize }}<kbd>{{ key }}</kbd>
@@ -35,8 +35,8 @@
 </form>
 
 <nav>
-  {% if prev_id %}<a id="prev" href="{{ url_for('pair', pair_id=prev_id) }}">← Previous<kbd>B</kbd></a>{% else %}<span></span>{% endif %}
-  <span>Pair {{ pair.id }}</span>
+  <a id="prev" href="{{ url_for('pair', pair_id=prev_id) if prev_id else '' }}"{% if not prev_id %} hidden{% endif %}>← Previous<kbd>B</kbd></a>
+  <span id="pair-no">Pair {{ pair.id }}</span>
 </nav>
 
 </div>
@@ -75,15 +75,69 @@
   // the tips stay open beside the pair on wide screens; on phones they fold under it
   if (matchMedia("(min-width: 960px)").matches) document.getElementById("tips").open = true;
   const keys = { y: "yes", u: "unsure", n: "no", "1": "yes", "2": "unsure", "3": "no" };
+  const form = document.getElementById("answers"), prev = document.getElementById("prev");
   let sent = false;
-  document.getElementById("answers").addEventListener("submit", () => { sent = true; });
+
+  // Answer in the background and swap the next pair in place: one round trip and no page
+  // reload, which matters far from the server (Turkey to Australia is ~0.3 s per request).
+  // The next pair's images are preloaded, so they show at once. Any failure falls back to
+  // the plain form post.
+  form.addEventListener("submit", async (e) => {
+    if (!e.submitter) return;  // old browser: the plain form post
+    e.preventDefault();
+    if (sent) return;  // still sending, or the next pair's images still loading
+    sent = true;
+    const label = e.submitter.value;
+    try {
+      const r = await fetch(form.action, { method: "POST", headers: { "X-Answer-Fetch": "1" },
+                                           body: new URLSearchParams({ label }) });
+      if (!r.ok || !(r.headers.get("Content-Type") || "").includes("json")) throw new Error(r.status);
+      const d = await r.json();
+      if (d.leave) { location.href = d.leave; return; }
+      history.pushState(null, "", d.url);
+      await show(d);
+    } catch (err) {
+      const input = Object.assign(document.createElement("input"), { type: "hidden", name: "label", value: label });
+      form.append(input);
+      form.submit();
+      return;
+    }
+    sent = false;
+  });
+
+  // the old logos must never stay on screen under the new pair's buttons: blank them, and keep
+  // answers locked until both new images have loaded (or failed: "Unsure" covers that)
+  function show(d) {
+    const imgs = [["img-a", d.img_a], ["img-b", d.img_b]].map(([id, src]) => {
+      const img = document.getElementById(id);
+      img.style.visibility = "hidden";
+      const done = new Promise((ok) => { img.onload = img.onerror = ok; });
+      img.src = src;
+      return done.then(() => { img.style.visibility = ""; });
+    });
+    form.action = d.url;
+    form.querySelectorAll("button").forEach((b) => b.classList.toggle("chosen", b.value === d.current));
+    document.getElementById("progress").textContent =
+      d.core ? `${d.in_batch} / ${d.size} pairs` : `batch ${d.batch} · ${d.in_batch} / ${d.size}`;
+    document.getElementById("bar").style.width = d.size ? `${100 * d.in_batch / d.size}%` : "0%";
+    document.getElementById("pair-no").textContent = `Pair ${d.id}`;
+    prev.hidden = !d.prev;
+    prev.href = d.prev || "";
+    d.prefetch.forEach((src) => { new Image().src = src; });
+    if (document.activeElement) document.activeElement.blur();
+    return Promise.all(imgs);
+  }
+
+  // back/forward between swapped-in pairs: load that page from the server
+  addEventListener("popstate", () => location.reload());
+
   document.addEventListener("keydown", (e) => {
     if (sent || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (keys[k]) {
-      document.querySelector(`#answers button[value="${keys[k]}"]`).click();
-    } else if (k === "b" && document.getElementById("prev")) {
-      location.href = document.getElementById("prev").href;
+      form.querySelector(`button[value="${keys[k]}"]`).click();
+    } else if (k === "b" && !prev.hidden) {
+      location.href = prev.href;
     }
   });
 </script>

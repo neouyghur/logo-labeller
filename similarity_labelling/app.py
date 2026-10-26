@@ -45,7 +45,7 @@ from functools import wraps
 import click
 import segno
 import google.auth.exceptions
-from flask import (Flask, abort, g, redirect, render_template, request,
+from flask import (Flask, abort, g, jsonify, redirect, render_template, request,
                    send_from_directory, session, url_for)
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS labels (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, pair_id)
 );
+-- next_pair counts each pair's answers
+CREATE INDEX IF NOT EXISTS labels_pair ON labels(pair_id);
 -- decided once, at the end of an annotator's first batch
 CREATE TABLE IF NOT EXISTS certificates (
     user_id     INTEGER PRIMARY KEY REFERENCES users(id),
@@ -264,8 +266,10 @@ def next_pair(skip_id=None):
     # as wide as pairs.shuffle (abs(random()), 63 bits), so it reorders the high bits too
     salt = random.Random(uid).getrandbits(63)
     row = db().execute(
-        """WITH used AS (SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
-                         WHERE l.user_id = :uid ORDER BY l.rowid LIMIT -1 OFFSET :start)
+        """WITH used AS (SELECT * FROM (SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
+                                        WHERE l.user_id = :uid ORDER BY l.rowid LIMIT -1 OFFSET :start)
+                         -- prefetching: the pair on screen counts as answered, query included
+                         UNION ALL SELECT img_a FROM pairs WHERE id = :skip)
            SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
            LEFT JOIN users u ON u.id = l.user_id
            WHERE p.id IS NOT :skip
@@ -511,21 +515,37 @@ def pair(pair_id):
     p = db().execute("SELECT * FROM pairs WHERE id = ?", (pair_id,)).fetchone()
     if p is None:
         abort(404)
+    intro = not guided()
+    if intro:
+        # when the guide slides were first shown, for the minimum reading time
+        session.setdefault("guide_started", time.time())
+    return render_template("pair.html", intro=intro, **pair_state(p))
+
+
+def pair_state(p):
+    """What the pair page shows for pair row p: the page itself, and the in-place answer swap."""
     current = db().execute("SELECT rowid, label FROM labels WHERE user_id = ? AND pair_id = ?",
-                           (session["user_id"], pair_id)).fetchone()
+                           (session["user_id"], p["id"])).fetchone()
     # "previous" walks back through this annotator's own answers, in the order first given
     # (an upsert keeps the rowid, so changing an answer does not reorder them)
     prev = db().execute(
         "SELECT pair_id FROM labels WHERE user_id = ? AND rowid < ? ORDER BY rowid DESC LIMIT 1",
         (session["user_id"], current["rowid"] if current else sys.maxsize)).fetchone()
-    intro = not guided()
-    if intro:
-        # when the guide slides were first shown, for the minimum reading time
-        session.setdefault("guide_started", time.time())
-    return render_template("pair.html", pair=p, current=current["label"] if current else None,
-                           intro=intro,
-                           prev_id=prev["pair_id"] if prev else None,
-                           prefetch=next_pair(skip_id=pair_id), **progress())
+    return dict(pair=p, current=current["label"] if current else None,
+                prev_id=prev["pair_id"] if prev else None,
+                prefetch=next_pair(skip_id=p["id"]), **progress())
+
+
+def pair_json(p):
+    """pair_state as JSON for the page script, which swaps the pair in without a reload."""
+    st = pair_state(p)
+    img = lambda row, side: url_for("image", relpath=row[side])
+    nxt = st["prefetch"]
+    return {"id": p["id"], "url": url_for("pair", pair_id=p["id"]),
+            "img_a": img(p, "img_a"), "img_b": img(p, "img_b"), "current": st["current"],
+            "prev": url_for("pair", pair_id=st["prev_id"]) if st["prev_id"] else None,
+            "prefetch": [img(nxt, "img_a"), img(nxt, "img_b")] if nxt else [],
+            "core": st["core"], "batch": st["batch"], "in_batch": st["in_batch"], "size": st["size"]}
 
 
 @app.route("/pair/<int:pair_id>", methods=["POST"])
@@ -551,7 +571,12 @@ def label(pair_id):
            DO UPDATE SET label = excluded.label, updated_at = datetime('now')""",
         (session["user_id"], pair_id, value))
     db().commit()
-    return redirect(url_for("index"))
+    # straight on to the next pair; the batch-done and nothing-left pages are index()'s
+    nxt = None if batch_over(progress()) else next_pair()
+    if request.headers.get("X-Answer-Fetch"):
+        # the page script swaps the next pair in place: one round trip, no reload
+        return jsonify(pair_json(nxt) if nxt else {"leave": url_for("index")})
+    return redirect(url_for("pair", pair_id=nxt["id"]) if nxt else url_for("index"))
 
 
 @app.route("/certificate")
