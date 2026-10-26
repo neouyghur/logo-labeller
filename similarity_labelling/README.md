@@ -107,7 +107,9 @@ until its last slide (a two-pair practice, answered correctly) has been reached 
 labelling" pressed (`users.guided`). Each slide locks "Next" for 5-10 s of reading (`data-min`,
 only while the tab is visible), and the server refuses to record the guide as read less than
 `LABELWEB_GUIDE_MIN` seconds (default 45) after it first opened. Its example logos are invented SVG marks drawn in the template, plus real look-alike pairs
-(`static/guide/*.jpg`, from Creative Bloq's "famous logos that look unbelievably similar"). The pair page
+(`static/guide/*.jpg`, from Creative Bloq's "famous logos that look unbelievably similar" and
+Logo Design Hill's "examples of similar logos" and LogoDesign.net's "logo lookalikes"), shown on
+four slides: two of Yes pairs, one of Unsure and one of No. The pair page
 keeps a short "What counts as similar?" panel with a "Replay the guide" button.
 
 ## Attention checks
