@@ -16,17 +16,17 @@
 
 <h2>Annotators</h2>
 <table>
-  <tr><th>email</th><th>answers</th><th>batches</th><th>checks right</th><th>accuracy</th><th>last answer (UTC)</th></tr>
+  <tr><th>email</th><th>role</th><th>answers</th><th>batches</th><th>checks right</th><th>accuracy</th><th>last answer (UTC)</th></tr>
   {% for a in annotators %}
   <tr{% if not a.active %} class="muted"{% endif %}>
-    <td>{{ a.email }}</td><td>{{ a.answers }}</td>
-    <td>{{ "%.1f" | format(a.answers / size if size else 0) }}</td>
+    <td>{{ a.email }}</td><td>{{ "core" if a.core else "volunteer" }}</td><td>{{ a.answers }}</td>
+    <td>{% if a.core %}{{ "%.1f" | format(100 * a.real / o.total if o.total else 0) }}% of pairs{% else %}{{ "%.1f" | format(a.answers / size if size else 0) }}{% endif %}</td>
     <td>{{ a.correct }} / {{ a.checks }}</td>
     <td>{% if a.checks %}{{ "%.0f" | format(100 * a.correct / a.checks) }}%{% endif %}</td>
     <td>{{ a.last }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="6">No answers yet.</td></tr>
+  <tr><td colspan="7">No answers yet.</td></tr>
   {% endfor %}
 </table>
 

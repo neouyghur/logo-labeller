@@ -5,9 +5,9 @@ Flask + SQLite behind nginx on the Nectar VM `logo-label` (203.101.229.244),
 served at https://203-101-229-244.sslip.io.
 
 Every pair needs `LABELWEB_TARGET` answers (default 3) from different annotators. Each annotator
-does **one batch of 30** (`LABELWEB_BATCH`); after it, only those who enter the team passcode
+does **one batch of 50** (`LABELWEB_BATCH`); after it, only those who enter the team passcode
 (the audit one, QUTMETU) get "Help more" for further batches (`LABELWEB_MAX_BATCHES=0`: everyone does):
-21 real pairs and 9 attention checks (`LABELWEB_CHECKS`) at positions fixed per annotator, each
+42 real pairs and 8 attention checks (`LABELWEB_CHECKS`) at positions fixed per annotator, each
 query at most once. Real pairs go fewest answers first, then a fixed random order; checks are a
 shared pool (a query with another group's logo, answer "no") drawn in a per-annotator order.
 At the end, an annotator with at least 80% of checks right (`LABELWEB_CERT_MIN`) gets a printable
@@ -95,6 +95,17 @@ Any address that is a Google account works, including a QUT address registered a
 People without Google can create an account with their email and a password (Firebase
 Email/Password provider); they must click the confirmation link Firebase emails them
 before the site lets them in, and the name they enter is the one on their certificate.
+
+## Core labellers
+
+Three core labellers label every real pair. After their first sign-in:
+`sudo labelweb-admin set-core a@x b@y c@z` (`--off` undoes it). A core labeller has no batches
+and no target: they get every real pair they have not answered, one block of `LABELWEB_BATCH`
+pages after another with `LABELWEB_CORE_CHECKS` (1) attention check per block, and their header
+shows `answered / all pairs`. The answer target counts volunteers only, so volunteers never take
+pairs away from the core labellers. `/status` marks each annotator core or volunteer; `export`
+adds a `core` column to `answers.tsv` and `annotators.tsv`, and `n_core`, `core_majority`,
+`core_agreement` (core labellers alone) to `pairs_summary.tsv`.
 
 ## Welcome page and guide
 

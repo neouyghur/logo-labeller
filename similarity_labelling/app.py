@@ -6,8 +6,8 @@ answered, fewest answers first, then in a fixed random order (pairs.shuffle). On
 has reached the target, annotators see the done page; any number of annotators can join.
 Answers can be changed by going back.
 
-Each annotator does one batch (LABELWEB_BATCH pages, default 30; LABELWEB_MAX_BATCHES, default
-1, allows more). LABELWEB_CHECKS of its pages (default 9) are attention checks at positions
+Each annotator does one batch (LABELWEB_BATCH pages, default 50; LABELWEB_MAX_BATCHES, default
+1, allows more). LABELWEB_CHECKS of its pages (default 8) are attention checks at positions
 fixed per annotator. At the end of the first batch the annotator gets a printable certificate
 with a code (LS-XXXX-XXXX) if at least LABELWEB_CERT_MIN (0.8) of their checks were answered
 "no"; anyone can check a code at /verify, and passcode holders can mark its reward given.
@@ -19,6 +19,7 @@ Admin commands (run with `flask --app app <command>`, or `sudo labelweb-admin <c
   init-db               create the tables
   load-pairs CSV        add pairs from a CSV with header pair_key,img_a,img_b (rerun-safe)
   allow-email EMAIL...  let these accounts sign in
+  set-core EMAIL...     make these accounts core labellers (label every pair; --off undoes)
   remove-email EMAIL... revoke access at the next request; their answers are kept
   list-users            emails, access, answer counts
   progress              how many pairs have reached the target number of answers
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS users (
     active  INTEGER NOT NULL DEFAULT 1,
     batches INTEGER NOT NULL DEFAULT 1,
     name    TEXT NOT NULL DEFAULT '',
+    core    INTEGER NOT NULL DEFAULT 0,  -- a core labeller: labels every pair (set-core)
     guided  TEXT  -- when they finished the guide slides; NULL: the slides open over the first pair
 );
 CREATE TABLE IF NOT EXISTS labels (
@@ -132,8 +134,10 @@ app.config.update(
     USE_X_ACCEL=use_x_accel,
     TARGET=int(os.environ.get("LABELWEB_TARGET", "3")),
     # pages per batch (0 = one per query), attention checks among them, batches per annotator (0 = no limit)
-    BATCH=int(os.environ.get("LABELWEB_BATCH", "30")),
-    CHECKS=int(os.environ.get("LABELWEB_CHECKS", "9")),
+    BATCH=int(os.environ.get("LABELWEB_BATCH", "50")),
+    CHECKS=int(os.environ.get("LABELWEB_CHECKS", "8")),
+    # core labellers: attention checks per LABELWEB_BATCH pages
+    CORE_CHECKS=int(os.environ.get("LABELWEB_CORE_CHECKS", "1")),
     MAX_BATCHES=int(os.environ.get("LABELWEB_MAX_BATCHES", "1")),
     # the guide counts as read only after this many seconds (its slides lock Next for about 45 s)
     GUIDE_MIN=int(os.environ.get("LABELWEB_GUIDE_MIN", "30")),
@@ -202,20 +206,37 @@ def batch_size():
         "SELECT COUNT(DISTINCT img_a) FROM pairs WHERE is_check = 0").fetchone()[0]
 
 
+def is_core(uid):
+    return bool(db().execute("SELECT core FROM users WHERE id = ?", (uid,)).fetchone()[0])
+
+
 def progress():
-    """This annotator's own position: answers so far, batch number, place within the batch."""
+    """This annotator's own position: answers so far, batch number, place within the batch.
+
+    A core labeller has no batches: their progress is the real pairs answered out of all of them.
+    """
     uid = session["user_id"]
+    if is_core(uid):
+        real = db().execute(
+            """SELECT COUNT(*) FROM labels l JOIN pairs p ON p.id = l.pair_id
+               WHERE l.user_id = ? AND p.is_check = 0""", (uid,)).fetchone()[0]
+        total = db().execute("SELECT COUNT(*) FROM pairs WHERE is_check = 0").fetchone()[0]
+        return {"done": real, "size": total, "batch": 1, "allowed": 1, "in_batch": real, "core": True}
     done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?", (uid,)).fetchone()[0]
     allowed = db().execute("SELECT batches FROM users WHERE id = ?", (uid,)).fetchone()[0]
     size = batch_size()
     batch = min(done // size + 1, allowed) if size else 1
     return {"done": done, "size": size, "batch": batch, "allowed": allowed,
-            "in_batch": done - (batch - 1) * size}
+            "in_batch": done - (batch - 1) * size, "core": False}
 
 
-def check_slots(uid, batch, size):
+def batch_over(prog):
+    return not prog["core"] and prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]
+
+
+def check_slots(uid, batch, size, n):
     """Positions within a batch that hold attention checks: fixed per annotator and batch."""
-    return set(random.Random(f"{uid}:{batch}").sample(range(size), min(app.config["CHECKS"], size)))
+    return set(random.Random(f"{uid}:{batch}").sample(range(size), min(n, size)))
 
 
 def next_pair(skip_id=None):
@@ -227,28 +248,36 @@ def next_pair(skip_id=None):
     order shared by everyone, so pairs fill up to the target one after another; checks have no
     answer limit and go in a random order of the annotator's own. With skip_id (the pair on
     screen, for prefetching) the position is the one after it.
+
+    The target counts volunteers' answers only. A core labeller gets every real pair, whatever
+    its count, in blocks of LABELWEB_BATCH pages holding LABELWEB_CORE_CHECKS checks each.
     """
     uid = session["user_id"]
+    core = is_core(uid)
     size = batch_size()
+    n_checks = app.config["CORE_CHECKS"] if core else app.config["CHECKS"]
     done = db().execute("SELECT COUNT(*) FROM labels WHERE user_id = ?", (uid,)).fetchone()[0]
     if skip_id is not None:
         done += 1
     start = (done // size) * size if size else 0
-    want_check = int(bool(size) and done - start in check_slots(uid, done // size + 1, size))
-    salt = random.Random(uid).getrandbits(31)
+    want_check = int(bool(size) and done - start in check_slots(uid, done // size + 1, size, n_checks))
+    # as wide as pairs.shuffle (abs(random()), 63 bits), so it reorders the high bits too
+    salt = random.Random(uid).getrandbits(63)
     row = db().execute(
         """WITH used AS (SELECT p.img_a FROM labels l JOIN pairs p ON p.id = l.pair_id
                          WHERE l.user_id = :uid ORDER BY l.rowid LIMIT -1 OFFSET :start)
            SELECT p.* FROM pairs p LEFT JOIN labels l ON l.pair_id = p.id
+           LEFT JOIN users u ON u.id = l.user_id
            WHERE p.id IS NOT :skip
            GROUP BY p.id
-           HAVING COALESCE(SUM(l.user_id = :uid), 0) = 0 AND (p.is_check OR COUNT(l.user_id) < :target)
+           HAVING COALESCE(SUM(l.user_id = :uid), 0) = 0
+              AND (p.is_check OR :core OR COUNT(CASE WHEN u.core = 0 THEN 1 END) < :target)
            ORDER BY p.is_check != :want, p.img_a IN (SELECT img_a FROM used),
-                    CASE WHEN p.is_check THEN 0 ELSE COUNT(l.user_id) END,
+                    CASE WHEN p.is_check OR :core THEN 0 ELSE COUNT(CASE WHEN u.core = 0 THEN 1 END) END,
                     CASE WHEN p.is_check THEN (p.shuffle | :salt) - (p.shuffle & :salt) ELSE p.shuffle END
            LIMIT 1""",
         {"uid": uid, "start": start, "skip": skip_id, "target": app.config["TARGET"],
-         "want": want_check, "salt": salt}).fetchone()
+         "want": want_check, "salt": salt, "core": int(core)}).fetchone()
     # only checks left: every real pair has its answers, so there is nothing to label
     if row is not None and row["is_check"] and not want_check:
         return None
@@ -375,7 +404,8 @@ def logout():
 @app.context_processor
 def study_contacts():
     contacts = [re.fullmatch(r"\s*(.*?)\s*<\s*(\S+?)\s*>\s*", c) for c in app.config["CONTACTS"].split(";")]
-    return {"contacts": [m.groups() for m in contacts if m], "year": time.gmtime().tm_year}
+    return {"contacts": [m.groups() for m in contacts if m], "year": time.gmtime().tm_year,
+            "batch_pages": app.config["BATCH"]}
 
 
 def has_profile():
@@ -430,7 +460,7 @@ def index():
         return redirect(url_for("profile"))
     prog = progress()
     total = db().execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
-    if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
+    if batch_over(prog):
         # batch finished: the certificate, and another batch if allowed
         left = next_pair() is not None
         return render_template("done.html", state="batch", cert=certificate(session["user_id"]),
@@ -450,7 +480,7 @@ def more():
             return redirect(url_for("index", error="Wrong passcode."))
         grant_passcode(session["user_id"])
     prog = progress()
-    if prog["size"] and prog["done"] >= prog["allowed"] * prog["size"] and can_do_more(prog):
+    if batch_over(prog) and can_do_more(prog):
         db().execute("UPDATE users SET batches = batches + 1 WHERE id = ?", (session["user_id"],))
         db().commit()
     return redirect(url_for("index"))
@@ -495,7 +525,7 @@ def label(pair_id):
     answered = db().execute("SELECT 1 FROM labels WHERE user_id = ? AND pair_id = ?",
                             (session["user_id"], pair_id)).fetchone()
     prog = progress()
-    if not answered and prog["size"] and prog["done"] >= prog["allowed"] * prog["size"]:
+    if not answered and batch_over(prog):
         # a new answer past the end of the batch (a stale tab): show the batch-done page instead
         return redirect(url_for("index"))
     db().execute(
@@ -558,10 +588,15 @@ def init_db():
     db().executescript(SCHEMA)
     columns = [r["name"] for r in db().execute("PRAGMA table_info(pairs)")]
     if "shuffle" not in columns:
-        # databases created before the target-based assignment; random() is per row here
+        # databases created before the target-based assignment
         db().execute("ALTER TABLE pairs ADD COLUMN shuffle INTEGER NOT NULL DEFAULT 0")
-        db().execute("UPDATE pairs SET shuffle = abs(random())")
         db().commit()
+    # pairs loaded after that ALTER got its DEFAULT 0, which serves them in id order (query by
+    # query) and gives every annotator the same checks; random() here is per row
+    n = db().execute("UPDATE pairs SET shuffle = abs(random()) WHERE shuffle = 0").rowcount
+    db().commit()
+    if n:
+        click.echo(f"shuffled {n} pairs that had no random order")
     if "is_check" not in columns:
         db().execute("ALTER TABLE pairs ADD COLUMN is_check INTEGER NOT NULL DEFAULT 0")
         db().commit()
@@ -571,6 +606,9 @@ def init_db():
         db().commit()
     if "name" not in user_columns:
         db().execute("ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+        db().commit()
+    if "core" not in user_columns:
+        db().execute("ALTER TABLE users ADD COLUMN core INTEGER NOT NULL DEFAULT 0")
         db().commit()
     if "guided" not in user_columns:
         db().execute("ALTER TABLE users ADD COLUMN guided TEXT")
@@ -601,6 +639,18 @@ def allow_email(emails):
                      (email.strip().lower(),))
     db().commit()
     click.echo(f"allowed: {', '.join(e.strip().lower() for e in emails)}")
+
+
+@app.cli.command("set-core")
+@click.argument("emails", nargs=-1, required=True)
+@click.option("--off", is_flag=True, help="make them ordinary volunteers again")
+def set_core(emails, off):
+    """Make these accounts core labellers, who label every pair (they must have signed in once)."""
+    for email in emails:
+        n = db().execute("UPDATE users SET core = ? WHERE email = ?",
+                         (0 if off else 1, email.strip().lower())).rowcount
+        click.echo(f"{email}: {('volunteer' if off else 'core') if n else 'not found (sign in first)'}")
+    db().commit()
 
 
 @app.cli.command("remove-email")
@@ -651,7 +701,8 @@ def write_tsv(path, header, rows):
 def export(out_dir, min_check_accuracy):
     """Write answers, annotators, pairs_summary, participants and annotator_emails TSVs into OUT_DIR."""
     os.makedirs(out_dir, exist_ok=True)
-    users = db().execute("SELECT id, email FROM users ORDER BY id").fetchall()
+    users = db().execute("SELECT id, email, core FROM users ORDER BY id").fetchall()
+    core = {u["id"]: u["core"] for u in users}
     # anonymous ids in sign-up order; the email mapping goes to its own file
     anon = {u["id"]: f"A{i:02d}" for i, u in enumerate(users, 1)}
     answers = db().execute(
@@ -681,14 +732,16 @@ def export(out_dir, min_check_accuracy):
         s["acc"] = acc
 
     write_tsv(os.path.join(out_dir, "answers.tsv"),
-              ["pair_key", "query", "positive", "is_check", "annotator", "label", "answered_at"],
+              ["pair_key", "query", "positive", "is_check", "annotator", "core", "label", "answered_at"],
               [(a["pair_key"], query_of(a), positive_of(a), a["is_check"], anon[a["user_id"]],
-                a["label"], a["updated_at"]) for a in answers])
+                core[a["user_id"]], a["label"], a["updated_at"]) for a in answers])
     write_tsv(os.path.join(out_dir, "annotators.tsv"),
-              ["annotator", "n_answers", "n_checks", "check_correct", "check_accuracy", "trusted"],
-              [(anon[uid], s["n"], s["checks"], s["correct"],
+              ["annotator", "core", "n_answers", "n_checks", "check_correct", "check_accuracy", "trusted"],
+              [(anon[uid], core[uid], s["n"], s["checks"], s["correct"],
                 "" if s["acc"] is None else f"{s['acc']:.2f}", "yes" if trusted[uid] else "no")
-               for uid, s in stats.items()])
+               for uid, s in stats.items() if s["n"]])
+    # accounts that never answered are left out of the per-annotator files; codes stay as assigned
+    users = [u for u in users if stats[u["id"]]["n"]]
     write_tsv(os.path.join(out_dir, "annotator_emails.tsv"), ["annotator", "email"],
               [(anon[u["id"]], u["email"]) for u in users])
     profiles = {r["user_id"]: r for r in db().execute("SELECT * FROM profiles")}
@@ -697,24 +750,35 @@ def export(out_dir, min_check_accuracy):
                 profiles[u["id"]]["design"] or "not_said") if u["id"] in profiles
                else (anon[u["id"]], "", "") for u in users])
 
-    counts = {}
+    # votes per pair from trusted annotators: everyone, and the core labellers alone
+    counts = {"all": {}, "core": {}}
     for a in answers:
         if not a["is_check"] and trusted[a["user_id"]]:
-            counts.setdefault(a["pair_id"], {"yes": 0, "no": 0, "unsure": 0})[a["label"]] += 1
-    summary = []
-    for p in db().execute("SELECT * FROM pairs WHERE is_check = 0 ORDER BY pair_key"):
-        c = counts.get(p["id"], {"yes": 0, "no": 0, "unsure": 0})
+            groups = ("all", "core") if core[a["user_id"]] else ("all",)
+            for g in groups:
+                counts[g].setdefault(a["pair_id"], {"yes": 0, "no": 0, "unsure": 0})[a["label"]] += 1
+
+    def vote(c):
+        """n, majority (or tie) and agreement of one pair's votes."""
         n = sum(c.values())
         top = max(c.values())
         winners = [k for k in LABELS if c[k] == top]
         majority = "" if n == 0 else winners[0] if len(winners) == 1 else "tie"
+        return n, majority, f"{top / n:.2f}" if n else ""
+
+    summary = []
+    empty = {"yes": 0, "no": 0, "unsure": 0}
+    for p in db().execute("SELECT * FROM pairs WHERE is_check = 0 ORDER BY pair_key"):
+        c = counts["all"].get(p["id"], empty)
+        n, majority, agreement = vote(c)
+        cn, cmajority, cagreement = vote(counts["core"].get(p["id"], empty))
         summary.append((p["pair_key"], query_of(p), positive_of(p), n, c["yes"], c["no"],
-                        c["unsure"], majority, f"{top / n:.2f}" if n else ""))
+                        c["unsure"], majority, agreement, cn, cmajority, cagreement))
     write_tsv(os.path.join(out_dir, "pairs_summary.tsv"),
               ["pair_key", "query", "positive", "n_answers", "n_yes", "n_no", "n_unsure",
-               "majority", "agreement"], summary)
+               "majority", "agreement", "n_core", "core_majority", "core_agreement"], summary)
     click.echo(f"{len(answers)} answers from {len(users)} annotators "
-               f"({sum(not t for t in trusted.values())} untrusted) -> {out_dir}/")
+               f"({sum(not trusted[u['id']] for u in users)} untrusted) -> {out_dir}/")
 
 
 import audit  # noqa: E402,F401  registers the /audit pages and audit-export

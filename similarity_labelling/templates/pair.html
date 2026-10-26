@@ -15,7 +15,7 @@
 <div class="layout">
 <div>
 <header>
-  <span>{{ session.name }} · batch {{ batch }} · {{ in_batch }} / {{ size }}</span>
+  <span>{{ session.name }} · {% if core %}{{ in_batch }} / {{ size }} pairs{% else %}batch {{ batch }} · {{ in_batch }} / {{ size }}{% endif %}</span>
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
 </header>
 <div class="bar"><div style="width: {{ (100 * in_batch / size) if size else 0 }}%"></div></div>

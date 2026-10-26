@@ -164,7 +164,8 @@ def status():
     """Overall progress of the pair task and the audit; behind the same passcode as the audit."""
     size = batch_size()
     annotators = db().execute(
-        """SELECT u.email, u.active, COUNT(l.pair_id) AS answers,
+        """SELECT u.email, u.active, u.core, COUNT(l.pair_id) AS answers,
+                  COALESCE(SUM(p.is_check = 0), 0) AS real,
                   COALESCE(SUM(p.is_check), 0) AS checks,
                   COALESCE(SUM(p.is_check AND l.label = 'no'), 0) AS correct,
                   MAX(l.updated_at) AS last

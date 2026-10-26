@@ -140,8 +140,8 @@
 
         <section class="slide" data-min="4">
           <h2 id="intro-title">Welcome! 👋</h2>
-          <p class="lead">You'll see <strong>30 pairs of logos</strong>. For each pair, tell us whether
-             the two logos look similar. It takes about 3 minutes, and you get a certificate at the end.</p>
+          <p class="lead">You'll see <strong>{{ batch_pages }} pairs of logos</strong>. For each pair, tell us whether
+             the two logos look similar. It takes about {{ (batch_pages * 5 / 60) | round | int }} minutes, and you get a certificate at the end.</p>
           <div class="float"><figure>{{ bird() }}</figure><figure>{{ wordmark("NOVA", "#6b3fa0") }}</figure><figure>{{ star("#e08a00") }}</figure></div>
           <p class="muted">First, a 2-minute guide on what we mean by “similar”. Each slide unlocks
              <strong>Next</strong> after a few seconds, so take your time to read it.</p>
