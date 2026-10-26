@@ -332,6 +332,13 @@ def grant_passcode(uid):
     db().commit()
 
 
+def make_core(uid):
+    """A labeller who gave the team passcode while labelling: from now on they label every pair."""
+    grant_passcode(uid)
+    db().execute("UPDATE users SET core = 1 WHERE id = ?", (uid,))
+    db().commit()
+
+
 def can_do_more(prog):
     """Past LABELWEB_MAX_BATCHES, only annotators who entered the team passcode get more batches."""
     return (not app.config["MAX_BATCHES"] or prog["allowed"] < app.config["MAX_BATCHES"]
@@ -424,11 +431,19 @@ def profile():
         design = request.form.get("design", "")
         if (age and age not in AGE_RANGES) or (design and design not in DESIGN):
             abort(400)
+        typed = request.form.get("passcode", "").strip()
+        if typed:
+            if not passcode_ok(typed):
+                return render_template("profile.html", ages=AGE_RANGES, design=DESIGN,
+                                       error="Wrong passcode. Leave it empty unless you are a core labeller.",
+                                       age=age, chosen_design=design)
+            make_core(session["user_id"])
         db().execute("INSERT OR IGNORE INTO profiles (user_id, age_range, design) VALUES (?, ?, ?)",
                      (session["user_id"], age, design))
         db().commit()
         return redirect(url_for("index"))
-    return render_template("profile.html", ages=AGE_RANGES, design=DESIGN)
+    return render_template("profile.html", ages=AGE_RANGES, design=DESIGN, error=None, age="",
+                           chosen_design="")
 
 
 @app.route("/guide", methods=["POST"])
@@ -478,7 +493,9 @@ def more():
     if "passcode" in request.form:
         if not passcode_ok(request.form["passcode"]):
             return redirect(url_for("index", error="Wrong passcode."))
-        grant_passcode(session["user_id"])
+        # the research team's labellers: no more batches, every pair from here on
+        make_core(session["user_id"])
+        return redirect(url_for("index"))
     prog = progress()
     if batch_over(prog) and can_do_more(prog):
         db().execute("UPDATE users SET batches = batches + 1 WHERE id = ?", (session["user_id"],))
@@ -645,7 +662,11 @@ def allow_email(emails):
 @click.argument("emails", nargs=-1, required=True)
 @click.option("--off", is_flag=True, help="make them ordinary volunteers again")
 def set_core(emails, off):
-    """Make these accounts core labellers, who label every pair (they must have signed in once)."""
+    """Make these accounts core labellers, who label every pair (they must have signed in once).
+
+    Labellers can also do it themselves by giving the team passcode on the first form, or in the
+    "label more" box after a batch.
+    """
     for email in emails:
         n = db().execute("UPDATE users SET core = ? WHERE email = ?",
                          (0 if off else 1, email.strip().lower())).rowcount

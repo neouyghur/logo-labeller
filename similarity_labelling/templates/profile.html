@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block body %}
+<style>
+  .team { margin-top: 18px; font-size: 14px; }
+  .team summary { cursor: pointer; color: var(--muted); }
+  .small { font-size: 13px; margin: 6px 0 0; }
+</style>
 <header>
   <span>{{ session.name }}</span>
   <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
@@ -12,13 +17,20 @@
     <label for="age_range">Your age range</label>
     <select id="age_range" name="age_range">
       <option value="">Prefer not to say</option>
-      {% for value, text in ages.items() %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+      {% for value, text in ages.items() %}<option value="{{ value }}"{% if value == age %} selected{% endif %}>{{ text }}</option>{% endfor %}
     </select>
     <label for="design">Your experience with design</label>
     <select id="design" name="design">
       <option value="">Prefer not to say</option>
-      {% for value, text in design.items() %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+      {% for value, text in design.items() %}<option value="{{ value }}"{% if value == chosen_design %} selected{% endif %}>{{ text }}</option>{% endfor %}
     </select>
+    <details class="team"{% if error %} open{% endif %}>
+      <summary>Core labeller on the research team?</summary>
+      <label for="passcode">Team passcode</label>
+      <input id="passcode" name="passcode" autocomplete="off">
+      <p class="muted small">With the passcode you label every pair, with no batches. Everyone else: leave it empty.</p>
+    </details>
+    {% if error %}<p class="flash">{{ error }}</p>{% endif %}
     <button>Continue</button>
   </form>
 </div>

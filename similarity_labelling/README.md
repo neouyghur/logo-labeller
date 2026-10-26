@@ -98,7 +98,9 @@ before the site lets them in, and the name they enter is the one on their certif
 
 ## Core labellers
 
-Three core labellers label every real pair. After their first sign-in:
+Three core labellers label every real pair. They switch it on themselves with the team
+passcode (QUTMETU): in "Core labeller on the research team?" on the first form, or in the
+passcode box after a volunteer batch. Entering it at `/audit` or `/status` does not. By hand:
 `sudo labelweb-admin set-core a@x b@y c@z` (`--off` undoes it). A core labeller has no batches
 and no target: they get every real pair they have not answered, one block of `LABELWEB_BATCH`
 pages after another with `LABELWEB_CORE_CHECKS` (1) attention check per block, and their header
