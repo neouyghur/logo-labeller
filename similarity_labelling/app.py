@@ -135,7 +135,7 @@ app.config.update(
     BATCH=int(os.environ.get("LABELWEB_BATCH", "30")),
     CHECKS=int(os.environ.get("LABELWEB_CHECKS", "9")),
     MAX_BATCHES=int(os.environ.get("LABELWEB_MAX_BATCHES", "1")),
-    # the guide counts as read only after this many seconds (its slides lock Next for about 70 s)
+    # the guide counts as read only after this many seconds (its slides lock Next for about 45 s)
     GUIDE_MIN=int(os.environ.get("LABELWEB_GUIDE_MIN", "30")),
     # share of attention checks answered "no" that earns a certificate
     CERT_MIN=float(os.environ.get("LABELWEB_CERT_MIN", "0.8")),

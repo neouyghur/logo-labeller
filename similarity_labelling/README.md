@@ -104,7 +104,7 @@ The sign-in page carries the study welcome (purpose, researchers, data statement
 annotator code. The guide is a deck of slides
 (`templates/_intro.html`) that opens over the first pair; it is mandatory: answers are refused
 until its last slide (a two-pair practice, answered correctly) has been reached and "Start
-labelling" pressed (`users.guided`). Each slide locks "Next" for 4-8 s of reading (`data-min`,
+labelling" pressed (`users.guided`). Each slide locks "Next" for up to 4 s of reading (`data-min`,
 only while the tab is visible), and the server refuses to record the guide as read less than
 `LABELWEB_GUIDE_MIN` seconds (default 30) after it first opened. Its example logos are invented SVG marks drawn in the template, plus real look-alike pairs
 (`static/guide/*.jpg`, from Creative Bloq's "famous logos that look unbelievably similar" and
