@@ -27,7 +27,7 @@
 </div>
 
 <form method="post" class="answers" id="answers">
-  {% for value, key in [('yes', 'Y'), ('no', 'N'), ('unsure', 'U')] %}
+  {% for value, key in [('yes', 'Y'), ('unsure', 'U'), ('no', 'N')] %}
   <button name="label" value="{{ value }}" class="{{ value }}{% if current == value %} chosen{% endif %}">
     {{ value | capitalize }}<kbd>{{ key }}</kbd>
   </button>
@@ -57,8 +57,8 @@
     <p><strong>Ignore:</strong> brand familiarity, image quality (resolution, cropping,
        background) and what the text means.</p>
     <p><strong style="color: var(--yes)">Yes</strong>: highly similar ·
-       <strong style="color: var(--no)">No</strong>: dissimilar ·
-       <strong style="color: var(--unsure)">Unsure</strong>: in between, or an image won't load.</p>
+       <strong style="color: var(--unsure)">Unsure</strong>: in between, or an image won't load ·
+       <strong style="color: var(--no)">No</strong>: dissimilar.</p>
     <p><button class="link" type="button" onclick="openGuide()">Replay the guide with examples</button></p>
   </details>
 </aside>
@@ -74,7 +74,7 @@
 <script>
   // the tips stay open beside the pair on wide screens; on phones they fold under it
   if (matchMedia("(min-width: 960px)").matches) document.getElementById("tips").open = true;
-  const keys = { y: "yes", n: "no", u: "unsure", "1": "yes", "2": "no", "3": "unsure" };
+  const keys = { y: "yes", u: "unsure", n: "no", "1": "yes", "2": "unsure", "3": "no" };
   let sent = false;
   document.getElementById("answers").addEventListener("submit", () => { sent = true; });
   document.addEventListener("keydown", (e) => {

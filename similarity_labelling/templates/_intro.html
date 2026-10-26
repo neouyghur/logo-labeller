@@ -138,7 +138,7 @@
     <div class="viewport">
       <div class="track" id="intro-track">
 
-        <section class="slide" data-min="5">
+        <section class="slide" data-min="4">
           <h2 id="intro-title">Welcome! 👋</h2>
           <p class="lead">You'll see <strong>30 pairs of logos</strong>. For each pair, tell us whether
              the two logos look similar. It takes about 3 minutes, and you get a certificate at the end.</p>
@@ -147,7 +147,7 @@
              <strong>Next</strong> after a few seconds, so take your time to read it.</p>
         </section>
 
-        <section class="slide" data-min="8">
+        <section class="slide" data-min="6">
           <h2>The one question</h2>
           <p class="lead">If you saw one of these logos briefly, <strong>could you mistake it for the other</strong>,
              or would it strongly remind you of the other?</p>
@@ -155,7 +155,7 @@
           <p>Logos can be similar without being identical. Here only the colour changed.</p>
         </section>
 
-        <section class="slide" data-min="12">
+        <section class="slide" data-min="8">
           <h2>Real look-alikes: <span class="tag yes">Yes</span></h2>
           <p class="lead">Real logos from different companies that look strikingly alike.</p>
           <div class="real">
@@ -171,7 +171,7 @@
           <p class="credit">Examples via <a href="https://www.creativebloq.com/features/8-famous-logos-that-look-unbelievably-similar" target="_blank" rel="noopener">Creative Bloq</a>, <a href="https://michaelkwilliams16.wixsite.com/logodesignhill/post/examples-of-similar-logos" target="_blank" rel="noopener">Logo Design Hill</a> and <a href="https://www.logodesign.net/blog/logo-lookalikes/" target="_blank" rel="noopener">LogoDesign.net</a>. All logos are trademarks of their owners.</p>
         </section>
 
-        <section class="slide" data-min="12">
+        <section class="slide" data-min="8">
           <h2>More look-alikes: <span class="tag yes">Yes</span></h2>
           <p class="lead">Same structure and motif. You could mix them up at a glance.</p>
           <div class="real">
@@ -187,7 +187,7 @@
           <p class="credit">Examples via <a href="https://michaelkwilliams16.wixsite.com/logodesignhill/post/examples-of-similar-logos" target="_blank" rel="noopener">Logo Design Hill</a> and <a href="https://www.logodesign.net/blog/logo-lookalikes/" target="_blank" rel="noopener">LogoDesign.net</a>. All logos are trademarks of their owners.</p>
         </section>
 
-        <section class="slide" data-min="12">
+        <section class="slide" data-min="8">
           <h2>In between: <span class="tag unsure">Unsure</span></h2>
           <p class="lead">They share one or two features but differ clearly in others. Unsure is a fair answer.</p>
           <div class="real">
@@ -203,7 +203,7 @@
           <p class="credit">Examples via <a href="https://michaelkwilliams16.wixsite.com/logodesignhill/post/examples-of-similar-logos" target="_blank" rel="noopener">Logo Design Hill</a> and <a href="https://www.logodesign.net/blog/logo-lookalikes/" target="_blank" rel="noopener">LogoDesign.net</a>. All logos are trademarks of their owners.</p>
         </section>
 
-        <section class="slide" data-min="12">
+        <section class="slide" data-min="8">
           <h2>Not similar: <span class="tag no">No</span></h2>
           <p class="lead">Sharing a letter or a colour is not enough when the designs differ.</p>
           <div class="real">
@@ -215,7 +215,7 @@
           <p class="credit">Examples via <a href="https://www.logodesign.net/blog/logo-lookalikes/" target="_blank" rel="noopener">LogoDesign.net</a>. All logos are trademarks of their owners.</p>
         </section>
 
-        <section class="slide" data-min="10">
+        <section class="slide" data-min="7">
           <h2>What to look at</h2>
           <p class="lead">Let these shape your overall impression. No need to score each one.</p>
           <div class="tiles">
@@ -228,14 +228,14 @@
           </div>
         </section>
 
-        <section class="slide" data-min="7">
+        <section class="slide" data-min="5">
           <h2>Colour is a trap</h2>
           <p class="lead">Both are red, but the shapes have nothing in common.</p>
           {{ duo(star("#d23a2a"), script("Kivo", "#d23a2a"), "Not similar → No", "no") }}
           <p>Colour matters, but it should rarely decide your answer alone.</p>
         </section>
 
-        <section class="slide" data-min="8">
+        <section class="slide" data-min="6">
           <h2>Look past the photo</h2>
           <p class="lead">Blur, cropping, size or background come from how the image was collected,
              not from the design.</p>
@@ -244,20 +244,20 @@
           <ul class="ignore"><li>whether you know the brand</li><li>whether you like it</li><li>what the company sells</li></ul>
         </section>
 
-        <section class="slide" data-min="10">
-          <h2>Design, not words</h2>
+        <section class="slide" data-min="7">
+          <h2>Words and lettering</h2>
           <p class="lead">Different words in the same layout and font can look very similar…</p>
           {{ duo(wordmark("NOVA"), wordmark("LUMA"), "Similar → Yes", "yes") }}
-          <p class="lead">…and the same word in totally different styles can look different.</p>
-          {{ duo(wordmark("NOVA"), script("Nova", "#3a9a5b", leaf=true), "Not similar → No", "no") }}
+          <p class="lead">…and the same name in a different style is still easy to mix up.</p>
+          {{ duo(wordmark("NOVA"), script("Nova", "#3a9a5b", leaf=true), "Similar → Yes", "yes") }}
         </section>
 
-        <section class="slide" data-min="8">
+        <section class="slide" data-min="6">
           <h2>Your three answers</h2>
           <div class="keys">
             <div style="color: var(--yes)"><strong>Yes <kbd>Y</kbd></strong><span>highly similar: could be mistaken for each other</span></div>
-            <div style="color: var(--no)"><strong>No <kbd>N</kbd></strong><span>dissimilar: little in common beyond surface traits</span></div>
             <div style="color: var(--unsure)"><strong>Unsure <kbd>U</kbd></strong><span>in between, or an image won't load</span></div>
+            <div style="color: var(--no)"><strong>No <kbd>N</kbd></strong><span>dissimilar: little in common beyond surface traits</span></div>
           </div>
           <p class="lead">Go with your first instinct. If you deliberate for long, the pair is probably in
              the middle, so choose <strong>Unsure</strong>.</p>
@@ -266,20 +266,25 @@
 
         <section class="slide" data-min="0" id="intro-quiz">
           <h2>Quick practice</h2>
-          <p class="lead">Three warm-ups. Nothing here is recorded, but you need the right answers to start.</p>
+          <p class="lead">Four warm-ups. Nothing here is recorded, but you need the right answers to start.</p>
           <div class="quiz" data-answer="yes" data-why="The same bold blue P with a filled-in counter. PayPal took Pandora to court over it.">
             <div class="duo one"><figure><img src="{{ url_for('static', filename='guide/paypal_pandora.jpg') }}" alt="Two logos" loading="lazy"></figure></div>
-            <div class="pick"><button class="yes" value="yes">Yes</button><button class="no" value="no">No</button><button class="unsure" value="unsure">Unsure</button></div>
+            <div class="pick"><button class="yes" value="yes">Yes</button><button class="unsure" value="unsure">Unsure</button><button class="no" value="no">No</button></div>
             <p class="fb"></p>
           </div>
           <div class="quiz" data-answer="yes" data-why="Same emblem; the blur and the grey background are just image quality.">
             {{ duo(bird("#e08a00"), bird("#e08a00"), rough=true) }}
-            <div class="pick"><button class="yes" value="yes">Yes</button><button class="no" value="no">No</button><button class="unsure" value="unsure">Unsure</button></div>
+            <div class="pick"><button class="yes" value="yes">Yes</button><button class="unsure" value="unsure">Unsure</button><button class="no" value="no">No</button></div>
+            <p class="fb"></p>
+          </div>
+          <div class="quiz" data-answer="unsure" data-why="Same bright green and heavy lettering, but different words and letter shapes: somewhere in between.">
+            <div class="duo one"><figure><img src="{{ url_for('static', filename='guide/kik_kickstarter.jpg') }}" alt="Two logos" loading="lazy"></figure></div>
+            <div class="pick"><button class="yes" value="yes">Yes</button><button class="unsure" value="unsure">Unsure</button><button class="no" value="no">No</button></div>
             <p class="fb"></p>
           </div>
           <div class="quiz" data-answer="no" data-why="Same blue, but a badge versus a script wordmark: colour alone doesn't make them similar.">
             {{ duo(star("#2457c5"), script("Orla", "#2457c5")) }}
-            <div class="pick"><button class="yes" value="yes">Yes</button><button class="no" value="no">No</button><button class="unsure" value="unsure">Unsure</button></div>
+            <div class="pick"><button class="yes" value="yes">Yes</button><button class="unsure" value="unsure">Unsure</button><button class="no" value="no">No</button></div>
             <p class="fb"></p>
           </div>
         </section>
