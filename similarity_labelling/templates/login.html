@@ -69,6 +69,8 @@
   const show = (text) => { note.hidden = true; msg.textContent = text; msg.hidden = false; };
   const tell = (text) => { msg.hidden = true; note.textContent = text; note.hidden = false; };
   let creating = false;
+  // LABELWEB_VERIFY_EMAIL: new email accounts must click the confirmation link first
+  const verify = {{ verify_email | tojson }};
 
   const ERRORS = {
     "auth/popup-blocked": "Your browser blocked the sign-in window. Allow pop-ups for this site and try again.",
@@ -123,14 +125,18 @@
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         const name = $("name").value.trim();
         if (name) await updateProfile(cred.user, { displayName: name });
-        await sendEmailVerification(cred.user);
-        await signOut(auth);
-        mode(false);
-        tell(`We sent a confirmation link to ${email}. Click it (check your spam folder), then sign in here.`);
-        $("resend").hidden = false;
+        if (!verify) {
+          await finish(cred.user);
+        } else {
+          await sendEmailVerification(cred.user);
+          await signOut(auth);
+          mode(false);
+          tell(`We sent a confirmation link to ${email}. Click it (check your spam folder), then sign in here.`);
+          $("resend").hidden = false;
+        }
       } else {
         const cred = await signInWithEmailAndPassword(auth, email, password);
-        if (!cred.user.emailVerified) {
+        if (verify && !cred.user.emailVerified) {
           await signOut(auth);
           show(`Please confirm your email first: click the link we sent to ${email}, then sign in again.`);
           $("resend").hidden = false;

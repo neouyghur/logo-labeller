@@ -99,8 +99,10 @@ has the URL can label: check `list-users` and block strangers with `remove-email
 (a removed email stays blocked; its answers stay in the database and in `export`).
 Any address that is a Google account works, including a QUT address registered as one.
 People without Google can create an account with their email and a password (Firebase
-Email/Password provider); they must click the confirmation link Firebase emails them
-before the site lets them in, and the name they enter is the one on their certificate.
+Email/Password provider) and are signed straight in; the name they enter is the one on their
+certificate. Email confirmation is off because Firebase's link often never reached university
+inboxes; `LABELWEB_VERIFY_EMAIL=1` in `/etc/labelweb.env` turns it back on (then restart).
+Without it an address is not proven to belong to whoever typed it.
 
 ## Core labellers
 

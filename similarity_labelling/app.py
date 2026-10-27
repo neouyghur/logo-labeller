@@ -147,6 +147,9 @@ app.config.update(
     CERT_MIN=float(os.environ.get("LABELWEB_CERT_MIN", "0.8")),
     # 1: any verified Google or email-and-password account may sign in; 0: only emails added with allow-email
     OPEN_SIGNUP=os.environ.get("LABELWEB_OPEN_SIGNUP", "0") == "1",
+    # 1: email-and-password accounts must click Firebase's confirmation link before signing in.
+    # Off by default: the link often never reached university inboxes (2026-10-27)
+    VERIFY_EMAIL=os.environ.get("LABELWEB_VERIFY_EMAIL", "0") == "1",
     # gallery audit sheets: one directory per sheet; empty passcode closes the audit
     AUDIT_ROOT=os.environ.get("LABELWEB_AUDIT", "audit"),
     AUDIT_PASSCODE=os.environ.get("LABELWEB_AUDIT_PASSCODE", ""),
@@ -368,7 +371,7 @@ def overall():
 @app.route("/login")
 def login():
     return render_template("login.html", firebase=app.config["FIREBASE"],
-                           configured=firebase_configured(),
+                           configured=firebase_configured(), verify_email=app.config["VERIFY_EMAIL"],
                            next=safe_next(request.args.get("next")))
 
 
@@ -382,8 +385,9 @@ def session_login():
         claims = id_token.verify_firebase_token(token, google_requests.Request(), audience=project_id)
     except (ValueError, google.auth.exceptions.GoogleAuthError):
         return {"error": "Sign-in could not be verified. Try again."}, 401
+    # Google accounts always come verified; unconfirmed email-and-password ones pass unless VERIFY_EMAIL
     if (claims.get("iss") != f"https://securetoken.google.com/{project_id}"
-            or not claims.get("email_verified")):
+            or (app.config["VERIFY_EMAIL"] and not claims.get("email_verified"))):
         return {"error": "Sign-in could not be verified. Try again."}, 401
 
     email = claims.get("email", "").lower()
