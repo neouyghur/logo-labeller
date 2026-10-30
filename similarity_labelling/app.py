@@ -156,7 +156,7 @@ app.config.update(
     # shown on the welcome page
     # "Name <email>" entries separated by ";"
     CONTACTS=os.environ.get("LABELWEB_CONTACTS",
-                            "Osman Tursun <osman.tursun@qut.edu.au>; Sinan Kalkan <s.kalkan@metu.edu.tr>"),
+                            "Osman Tursun <osman.tursun@qut.edu.au>; Sinan Kalkan <skalkan@metu.edu.tr>"),
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=use_x_accel,
     # the Firebase web config; these values are public by design

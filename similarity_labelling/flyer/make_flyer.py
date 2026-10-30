@@ -17,7 +17,7 @@ BRAND = HERE.parent / "static" / "brand"
 REWARDS = {
     "metu": ("Your reward",
              "Finish your batch, download your certificate, and collect your reward from "
-             "<strong>Prof. Sinan Kalkan</strong> (s.kalkan@metu.edu.tr)."),
+             "<strong>Prof. Sinan Kalkan</strong> (skalkan@metu.edu.tr)."),
     "qut": ("Get a treat!",
             "Finish your batch and show your certificate (on your phone is fine) "
             "to grab a <strong>chocolate or candy</strong>."),
@@ -102,7 +102,7 @@ PAGE = """<!doctype html>
 <footer>
   <img src="{qut}" alt="QUT"><img src="{metu}" alt="METU">
   <div class="who">Osman Tursun, Yusuf Efe Ozudogru, Efe Buke, Clinton Fookes, Sinan Kalkan<br>
-  Contact: osman.tursun@qut.edu.au · s.kalkan@metu.edu.tr</div>
+  Contact: osman.tursun@qut.edu.au · skalkan@metu.edu.tr</div>
 </footer>
 </div></body></html>
 """
