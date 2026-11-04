@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block main_class %}wide{% endblock %}
+{% block body %}
+<style>
+  .rv th { cursor: pointer; user-select: none; }
+  .rv th[data-k]:hover { color: var(--focus); }
+  .rv td { vertical-align: middle; }
+  .rv img { width: 48px; height: 48px; object-fit: contain; background: #fff; border: 1px solid var(--line);
+            border-radius: 4px; display: block; }
+  .mix { display: flex; width: 160px; height: 10px; border-radius: 3px; overflow: hidden; background: var(--line); }
+  .mix span { display: block; height: 100%; }
+  .v-strict { background: #1f7a4d; } .v-majority { background: #7cc39b; }
+  .v-disputed { background: #c9a227; } .v-rejected { background: #b3261e; }
+  .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 12px; vertical-align: -1px; }
+</style>
+<header>
+  <span>{{ session.name }} · label review</span>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+<h1 class="question">Label review: {{ rows | length }} queries, {{ "{:,}".format(totals.n) }} positives</h1>
+<p class="legend muted">Core votes per positive:
+  <span class="v-strict"></span>strict 3/3 yes ({{ "{:,}".format(totals.strict) }})
+  <span class="v-majority"></span>majority 2/3 yes ({{ "{:,}".format(totals.majority) }})
+  <span class="v-disputed"></span>disputed ({{ "{:,}".format(totals.disputed) }})
+  <span class="v-rejected"></span>rejected ≥ 2 no ({{ "{:,}".format(totals.rejected) }})
+  · click a column to sort</p>
+<table class="rv" id="rv">
+  <thead><tr><th data-k="num">#</th><th>query</th><th data-k="n">positives</th><th data-k="kept">kept (≥ 2 yes)</th>
+    <th data-k="strict">strict</th><th data-k="disputed">disputed</th><th data-k="rejected">rejected</th><th>mix</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr data-num="{{ r.num }}" data-n="{{ r.n }}" data-kept="{{ r.kept }}" data-strict="{{ r.strict }}"
+      data-disputed="{{ r.disputed }}" data-rejected="{{ r.rejected }}">
+    <td><a href="{{ url_for('review.query', num=r.num) }}">{{ r.num }}</a></td>
+    <td><a href="{{ url_for('review.query', num=r.num) }}"><img loading="lazy" src="{{ url_for('image', relpath=r.img_a) }}" alt="{{ r.img_a }}"></a></td>
+    <td>{{ r.n }}</td><td>{{ r.kept }}</td><td>{{ r.strict }}</td><td>{{ r.disputed }}</td><td>{{ r.rejected }}</td>
+    <td><div class="mix">{% for v in ("strict", "majority", "disputed", "rejected") %}<span class="v-{{ v }}" style="width: {{ 100 * r[v] / r.n if r.n else 0 }}%"></span>{% endfor %}</div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<script>
+  // sort by a column; a second click on the same column flips the order
+  const body = document.querySelector("#rv tbody");
+  let last = "num", desc = false;
+  document.querySelectorAll("#rv th[data-k]").forEach((th) => th.addEventListener("click", () => {
+    const k = th.dataset.k;
+    desc = k === last ? !desc : k !== "num";
+    last = k;
+    [...body.rows].sort((a, b) => (a.dataset[k] - b.dataset[k]) * (desc ? -1 : 1))
+      .forEach((tr) => body.append(tr));
+  }));
+</script>
+{% endblock %}

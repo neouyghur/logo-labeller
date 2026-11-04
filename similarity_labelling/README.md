@@ -173,6 +173,15 @@ sudo labelweb-admin export /srv/labelweb/data/export     # --min-check-accuracy 
 | `answers.tsv` | answer, checks included | `pair_key, query, positive, is_check, annotator, label, answered_at` |
 | `annotator_emails.tsv` | annotator | `annotator, email` — private; the other files use `A01`, `A02`, … |
 
+`python analyze_labels.py EXPORT_DIR` prints the summary used to choose the new set
+(participation, coverage, core agreement, majorities, positives kept per query under each rule).
+
+**Visual check: `/review/`** (behind the audit passcode, like `/status`) lists every query with
+how many of its positives each rule keeps, sortable; `/review/<n>` shows query n beside all its
+positives, best score first, each with the core labellers' answers (export ids `A01`…), the
+volunteers' counts, the mean score and a verdict: strict (3/3 core yes), majority (2/3),
+rejected (≥ 2 no) or disputed. Only trusted annotators count. `←`/`→` move between queries.
+
 A cron job writes `/srv/labelweb/data/backups/labels-YYYY-MM-DD.sqlite3` at 03:17 daily,
 keeping 30 days. **Nectar does not back up the VM** and deletes it 3 months after the
 allocation ends, so copy backups off it regularly:

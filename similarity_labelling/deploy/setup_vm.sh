@@ -13,7 +13,7 @@ usermod -aG labelweb ubuntu
 
 install -d -o labelweb -g labelweb -m 755 /srv/labelweb /srv/labelweb/app /srv/labelweb/images /srv/labelweb/audit
 install -d -o labelweb -g labelweb -m 750 /srv/labelweb/data /srv/labelweb/data/backups
-cp -r "$SRC/app.py" "$SRC/audit.py" "$SRC/templates" "$SRC/static" "$SRC/requirements.txt" /srv/labelweb/app/
+cp -r "$SRC/app.py" "$SRC/audit.py" "$SRC/review.py" "$SRC/templates" "$SRC/static" "$SRC/requirements.txt" /srv/labelweb/app/
 chown -R labelweb:labelweb /srv/labelweb/app
 
 [ -d /srv/labelweb/venv ] || python3 -m venv /srv/labelweb/venv

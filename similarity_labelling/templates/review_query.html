@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block main_class %}wide{% endblock %}
+{% block body %}
+<style>
+  .top { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .top figure { margin: 0; width: 200px; height: 200px; background: #fff; border: 3px solid var(--focus);
+                border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 8px; }
+  .top img, .pc img { max-width: 100%; max-height: 100%; }
+  .filters button { font: inherit; font-size: 14px; padding: 4px 10px; margin: 2px; border-radius: 14px;
+                    border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+  .filters button.on { border-color: var(--focus); outline: 2px solid var(--focus); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .pc { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+          border-top: 6px solid var(--line); font-size: 13px; }
+  .pc .img { background: #fff; aspect-ratio: 1; overflow: hidden; padding: 8px; }
+  .pc .img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .pc .meta { padding: 6px 8px 8px; }
+  .pc.strict { border-top-color: #1f7a4d; } .pc.majority { border-top-color: #7cc39b; }
+  .pc.disputed { border-top-color: #c9a227; } .pc.rejected { border-top-color: #b3261e; }
+  .chips { display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0; }
+  .chip { border-radius: 3px; padding: 0 5px; color: #fff; font-weight: 600; font-size: 12px; }
+  .chip.yes { background: #1f7a4d; } .chip.unsure { background: #8a6d00; } .chip.no { background: #b3261e; }
+  .row { display: flex; justify-content: space-between; color: var(--muted); }
+  nav.q { display: flex; justify-content: space-between; margin: 12px 0; }
+</style>
+<header>
+  <span>{{ session.name }} · <a href="{{ url_for('review.index') }}">label review</a> · query {{ num }} / {{ total }}</span>
+  <form method="post" action="{{ url_for('logout') }}"><button class="link">Log out</button></form>
+</header>
+<nav class="q">
+  {% if prev %}<a href="{{ prev }}">← previous query<kbd>←</kbd></a>{% else %}<span></span>{% endif %}
+  {% if next %}<a href="{{ next }}">next query<kbd>→</kbd></a>{% endif %}
+</nav>
+<div class="top">
+  <figure><img src="{{ url_for('image', relpath=img_a) }}" alt="query"></figure>
+  <div>
+    <p><strong>Query {{ num }}</strong> · {{ img_a }}<br>
+       {{ pairs | length }} positives, best score first. Score: yes 2, unsure 1, no 0, averaged over every
+       trusted answer. Chips: each core labeller's answer, then the volunteers' counts.</p>
+    <div class="filters" id="filters">
+      <button data-f="all" class="on">all {{ pairs | length }}</button>
+      <button data-f="strict">strict 3/3 yes {{ counts.strict }}</button>
+      <button data-f="majority">majority 2/3 yes {{ counts.majority }}</button>
+      <button data-f="disputed">disputed {{ counts.disputed }}</button>
+      <button data-f="rejected">rejected ≥ 2 no {{ counts.rejected }}</button>
+    </div>
+  </div>
+</div>
+<div class="grid" id="grid">
+  {% for p in pairs %}
+  <div class="pc {{ p.verdict }}" data-v="{{ p.verdict }}">
+    <div class="img"><img loading="lazy" src="{{ url_for('image', relpath=p.img_b) }}" alt="{{ p.key }}"></div>
+    <div class="meta">
+      <div class="chips">
+        {% for who, lab in p.core %}<span class="chip {{ lab }}" title="core {{ who }}: {{ lab }}">{{ who }} {{ lab[0] | upper }}</span>{% endfor %}
+      </div>
+      <div class="chips">
+        {% for lab in ("yes", "unsure", "no") %}{% if p.vol[lab] %}<span class="chip {{ lab }}" title="volunteers: {{ p.vol[lab] }} {{ lab }}">vol {{ p.vol[lab] }}{{ lab[0] | upper }}</span>{% endif %}{% endfor %}
+      </div>
+      <div class="row"><span>{{ p.verdict }}</span>
+        <span>score {{ "%.2f" | format(p.score) if p.score is not none else "–" }}</span></div>
+      <div class="row"><span>{{ p.key }}</span></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<script>
+  const buttons = document.querySelectorAll("#filters button");
+  buttons.forEach((b) => b.addEventListener("click", () => {
+    buttons.forEach((x) => x.classList.toggle("on", x === b));
+    document.querySelectorAll("#grid .pc").forEach((c) => {
+      c.hidden = b.dataset.f !== "all" && c.dataset.v !== b.dataset.f;
+    });
+  }));
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    {% if prev %}if (e.key === "ArrowLeft") location.href = {{ prev | tojson }};{% endif %}
+    {% if next %}if (e.key === "ArrowRight") location.href = {{ next | tojson }};{% endif %}
+  });
+</script>
+{% endblock %}

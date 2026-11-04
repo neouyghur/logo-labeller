@@ -11,8 +11,10 @@ REPO=${REPO:-/work/SAIVT/LOGO/labelling/logo-labeller}
 SRC=$(cd "$(dirname "$0")" && pwd)
 PACK=${1:-}
 
-# exports hold annotator emails and answers: never copy them into the repo
+# exports and database dumps (e.g. the backups repo downloaded as a zip) hold annotator emails
+# and answers: never copy them into the repo
 rsync -a --delete --exclude __pycache__ --exclude 'export_*' --exclude 'audit_export_*' \
+  --exclude '*.zip' --exclude '*.sql' --exclude '*.sqlite3' \
   "$SRC/" "$REPO/similarity_labelling/"
 if [ -n "$PACK" ]; then
   rm -rf "$REPO/data"

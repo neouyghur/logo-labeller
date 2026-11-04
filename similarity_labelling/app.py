@@ -744,6 +744,11 @@ def write_tsv(path, header, rows):
         w.writerows(rows)
 
 
+def anon_ids():
+    """Anonymous annotator ids A01, A02, … in sign-up order, as in the export and /review."""
+    return {r[0]: f"A{i:02d}" for i, r in enumerate(db().execute("SELECT id FROM users ORDER BY id"), 1)}
+
+
 @app.cli.command("export")
 @click.argument("out_dir")
 @click.option("--min-check-accuracy", default=0.8, show_default=True,
@@ -753,8 +758,8 @@ def export(out_dir, min_check_accuracy):
     os.makedirs(out_dir, exist_ok=True)
     users = db().execute("SELECT id, email, core FROM users ORDER BY id").fetchall()
     core = {u["id"]: u["core"] for u in users}
-    # anonymous ids in sign-up order; the email mapping goes to its own file
-    anon = {u["id"]: f"A{i:02d}" for i, u in enumerate(users, 1)}
+    # the email mapping goes to its own file
+    anon = anon_ids()
     answers = db().execute(
         """SELECT p.id AS pair_id, p.pair_key, p.img_a, p.img_b, p.is_check,
                   l.user_id, l.label, l.updated_at
@@ -832,3 +837,4 @@ def export(out_dir, min_check_accuracy):
 
 
 import audit  # noqa: E402,F401  registers the /audit pages and audit-export
+import review  # noqa: E402,F401  registers /review, the visual check of the finished labels
